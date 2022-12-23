@@ -1,0 +1,31 @@
+{
+  "dependencies": {
+    "@adobe/fetch": "^3.1.2",
+    "commander": "^9.4.0",
+    "formdata-node": "^5"
+  },
+  "name": "bmw",
+  "description": "BMW Connected Drive apis",
+  "version": "1.0.0",
+  "main": "index.js",
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/colinbendell/bmw.git"
+  },
+  "keywords": [
+    "bmw",
+    "connected",
+    "drive",
+    "ix"
+  ],
+  "author": "Colin Bendell",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/colinbendell/bmw/issues"
+  },
+  "homepage": "https://github.com/colinbendell/bmw#readme"
+}
