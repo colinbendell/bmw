@@ -161,7 +161,7 @@ class BMWClientAPI {
             "bmw-correlation-id": correlationID,
             "bmw-is-demo-mode-active": false,
             "x-cluster-use-mock": "never",
-            "country": "CA",
+            "country": "CA", //TODO: replace country
         }, headers);
         if (this.token?.access_token && !reqHeaders.Authorization) reqHeaders.Authorization = `Bearer ${this.token.access_token}`;
 
@@ -441,43 +441,43 @@ class BMWClientAPI {
 
     async startClimate(vin) {
         const data = new URLSearchParams(Object.entries(params));
-        return await this.post(`/v3/presentation/remote-commands/${vin}/climate-now?action=START`, {});
+        return await this.post(`/eadrax-vrccs/v3/presentation/remote-commands/${vin}/climate-now?action=START`, {});
     }
 
     async stopClimate(vin) {
         const data = new URLSearchParams(Object.entries(params));
-        return await this.post(`/v3/presentation/remote-commands/${vin}/climate-now?action=STOP`, {});
+        return await this.post(`/eadrax-vrccs/v3/presentation/remote-commands/${vin}/climate-now?action=STOP`, {});
     }
 
     async lockDoor(vin) {
         const data = new URLSearchParams(Object.entries(params));
-        return await this.post(`/v3/presentation/remote-commands/${vin}/door-lock`, {});
+        return await this.post(`/eadrax-vrccs/v3/presentation/remote-commands/${vin}/door-lock`, {});
     }
 
     async unlockDoor(vin) {
         const data = new URLSearchParams(Object.entries(params));
-        return await this.post(`/v3/presentation/remote-commands/${vin}/door-unlock`, {});
+        return await this.post(`/eadrax-vrccs/v3/presentation/remote-commands/${vin}/door-unlock`, {});
     }
 
     async flashLights(vin) {
         const data = new URLSearchParams(Object.entries(params));
-        return await this.post(`/v3/presentation/remote-commands/${vin}/light-flash`, {});
+        return await this.post(`/eadrax-vrccs/v3/presentation/remote-commands/${vin}/light-flash`, {});
     }
 
     async honkHorns(vin) {
         const data = new URLSearchParams(Object.entries(params));
-        return await this.post(`/v3/presentation/remote-commands/${vin}/horn-blow`, {});
+        return await this.post(`/eadrax-vrccs/v3/presentation/remote-commands/${vin}/horn-blow`, {});
     }
 
     async remoteCommands(vin, serviceType, params = {}) {
-        // /v3/presentation/remote-commands/{vin}/climate-now?action=STOP
+        // /eadrax-vrccs/v3/presentation/remote-commands/{vin}/climate-now?action=STOP
 
         //climate-now
         //door-lock
         //light-flash
         //horn-blow
         const data = new URLSearchParams(Object.entries(params));
-        return await this.post(`/v3/presentation/remote-commands/${vin}/${serviceType}?${data}`, {});
+        return await this.post(`/eadrax-vrccs/v3/presentation/remote-commands/${vin}/${serviceType}?${data}`, {});
     }
 
     async remoteCommandsEventStatus(eventID) {
