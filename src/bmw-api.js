@@ -54,14 +54,14 @@ const UA = {
 const log = console;
 
 class BMWClientAPI {
-    constructor(username, password, auth = {path: '~/.bmw', section: 'default'}) {
+    constructor(username, password, geo, auth = {path: '~/.bmw', section: 'default'}) {
         const ini = IniFile.read(
             process.env.BMW_PATH || auth.path,
             process.env.BMW_SECTION || auth.section);
         this.auth = Object.assign({
             email: username || process.env.BMW_EMAIL || ini.email,
             password: password || process.env.BMW_PASSWORD || ini.password,
-            geo: process.env.BMW_GEO || ini.geo || Regions.NORTH_AMERICA,
+            geo: geo || process.env.BMW_GEO || ini.geo || Regions.NORTH_AMERICA,
             session: process.env.BMW_SESSION || ini.session || DEFAULT_SESSION_ID,
         }, auth);
 
@@ -440,32 +440,26 @@ class BMWClientAPI {
     }
 
     async startClimate(vin) {
-        const data = new URLSearchParams(Object.entries(params));
         return await this.post(`/eadrax-vrccs/v3/presentation/remote-commands/${vin}/climate-now?action=START`, {});
     }
 
     async stopClimate(vin) {
-        const data = new URLSearchParams(Object.entries(params));
         return await this.post(`/eadrax-vrccs/v3/presentation/remote-commands/${vin}/climate-now?action=STOP`, {});
     }
 
-    async lockDoor(vin) {
-        const data = new URLSearchParams(Object.entries(params));
+    async lock(vin) {
         return await this.post(`/eadrax-vrccs/v3/presentation/remote-commands/${vin}/door-lock`, {});
     }
 
-    async unlockDoor(vin) {
-        const data = new URLSearchParams(Object.entries(params));
+    async unlock(vin) {
         return await this.post(`/eadrax-vrccs/v3/presentation/remote-commands/${vin}/door-unlock`, {});
     }
 
     async flashLights(vin) {
-        const data = new URLSearchParams(Object.entries(params));
         return await this.post(`/eadrax-vrccs/v3/presentation/remote-commands/${vin}/light-flash`, {});
     }
 
-    async honkHorns(vin) {
-        const data = new URLSearchParams(Object.entries(params));
+    async honkHorn(vin) {
         return await this.post(`/eadrax-vrccs/v3/presentation/remote-commands/${vin}/horn-blow`, {});
     }
 
