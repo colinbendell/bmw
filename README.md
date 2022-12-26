@@ -48,7 +48,8 @@ The available commands include
 * `bmw unlock <vin>` to unlock a specific vehicle
 * `bmw flash <vin>` to flash the lights
 * `bmw honk <vin>` to unlock the vehicle
-* `bmw vehicles <vin>` current status info of the vehicle
+* `bmw list` list the vehicles associated with the account
+* `bmw status <vin>` current status info of the vehicle
 * `bmw trip-log <vin> <date>` log of the trips the current user has made on the vehicle
 * `bmw charge-log <vin>` log of the charges for the vehicle
 

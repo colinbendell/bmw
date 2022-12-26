@@ -6,24 +6,26 @@ class BMWClient {
         this.bmwClientAPI = new BMWClientAPI(username, password, region);
     }
 
-    async login() {
-        return this.bmwClientAPI.login();
+    async login(forceRefresh = false) {
+        return this.bmwClientAPI.login(forceRefresh);
     }
 
     async vehicles(filter = null) {
         await this.login();
-        const vehicles = this.bmwClientAPI.vehicles();
-
+        const vehicles = await this.bmwClientAPI.vehicles();
         if (filter) {
             return vehicles.filter(v => v.vin === filter || new RegExp(filter, "i").test(v?.attributes?.model));
         }
         return vehicles;
     }
 
-    async vehicleDetails(vin = null) {
+    async userFlags(filter = null) {
         await this.login();
-        console.log("login");
+        const res = await this.bmwClientAPI.userFlags();
+        return res;
+    }
 
+    async vehicleDetails(vin = null) {
         const vehicles = await this.vehicles(vin);
         for (const vehicle of vehicles) {
             const state = await this.bmwClientAPI.vehicleState(vehicle.vin);
@@ -57,8 +59,6 @@ class BMWClient {
     }
 
     async lock(vin = null) {
-        await this.login();
-
         const vehicles = await this.vehicles(vin);
         for (const vehicle of vehicles) {
             vehicle.event = await this.bmwClientAPI.lock(vehicle.vin)
@@ -70,8 +70,6 @@ class BMWClient {
     }
 
     async unlock(vin = null) {
-        await this.login();
-
         const vehicles = await this.vehicles(vin);
         for (const vehicle of vehicles) {
             vehicle.event = await this.bmwClientAPI.unlock(vehicle.vin)
@@ -83,8 +81,6 @@ class BMWClient {
     }
 
     async flashLights(vin = null) {
-        await this.login();
-
         const vehicles = await this.vehicles(vin);
         for (const vehicle of vehicles) {
             vehicle.event = await this.bmwClientAPI.flashLights(vehicle.vin)
@@ -96,8 +92,6 @@ class BMWClient {
     }
 
     async honkHorn(vin = null) {
-        await this.login();
-
         const vehicles = await this.vehicles(vin);
         for (const vehicle of vehicles) {
             vehicle.event = await this.bmwClientAPI.honkHorn(vehicle.vin);
@@ -109,8 +103,6 @@ class BMWClient {
     }
 
     async startClimate(vin = null) {
-        await this.login();
-
         const vehicles = await this.vehicles(vin);
         for (const vehicle of vehicles) {
             const state = await this.bmwClientAPI.vehicleState(vehicle.vin);
@@ -125,8 +117,6 @@ class BMWClient {
     }
 
     async stopClimate(vin = null) {
-        await this.login();
-
         const vehicles = await this.vehicles(vin);
         for (const vehicle of vehicles) {
             const state = await this.bmwClientAPI.vehicleState(vehicle.vin);
@@ -141,8 +131,6 @@ class BMWClient {
     }
 
     async startCharging(vin = null) {
-        await this.login();
-
         const vehicles = await this.vehicles(vin);
         const electriVehicles = vehicles.filter(v => v.attributes?.driveTrain === 'ELECTRIC');
 
@@ -162,7 +150,6 @@ class BMWClient {
     }
 
     async stopCharging(vin = null) {
-        await this.login();
         const vehicles = await this.vehicles(vin);
         const electriVehicles = vehicles.filter(v => v.attributes?.driveTrain === 'ELECTRIC');
 
