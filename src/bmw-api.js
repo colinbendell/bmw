@@ -367,7 +367,7 @@ class BMWClientAPI {
     async vehicleState(vin) {
         return await this.get(`/eadrax-vcs/v4/vehicles/state`, {"bmw-vin": vin} );
     }
-    async vehicleRecall(vin) {
+    async vehicleRecalls(vin) {
         return await this.get(`/eadrax-recallcs/v2/recalls?vin=${vin}`, {"bmw-gcid": "b4802a8d-d2eb-4518-b0bc-23b5cb32e0de"});
     }
 

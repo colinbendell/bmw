@@ -31,6 +31,7 @@ class BMWClient {
             const state = await this.bmwClientAPI.vehicleState(vehicle.vin);
             const chargingSettings = await this.bmwClientAPI.vehicleChargeSettings(vehicle.vin);
             const chargeState = await this.bmwClientAPI.vehicleChargeState(vehicle.vin);
+            vehicle.recalls = await this.bmwClientAPI.vehicleRecalls(vehicle.vin);
             Object.assign(vehicle, state, chargingSettings, chargeState);
         }
         return vehicles;

@@ -84,6 +84,7 @@ program
             console.log(`${vehicle.attributes?.model} ${vehicle.attributes?.year} (${vehicle.vin})`);
         }
     });
+
 program
     .command('status [vin]')
     .description('retrieve all vehicle data. If no VIN is provided, all vehicles are returned.')
@@ -95,11 +96,54 @@ program
             console.log(stringify(res.length <= 1 ? res[0] : res));
         }
         for (const vehicle of res) {
+            const updatedDate = Date.parse(vehicle.state?.lastUpdateDate);
+            const chargeState = vehicle.state?.electricChargingState;
             console.log(`${vehicle.attributes?.model} ${vehicle.attributes?.year} (${vehicle.vin}):`);
-            console.log(`├ 📍Location: ${vehicle.state?.location?.address?.formatted}`);
-            if (vehicle.state?.climateControlState?.activity !== 'INACTIVE')
-                console.log(`├ 🌡️Climate: ${vehicle.state?.climateControlState?.activity}`);
-            console.log(`└ 🔋Battery: ${vehicle.state?.electricChargingState?.chargingLevelPercent}% (${vehicle.state?.range} km) ${vehicle.state?.electricChargingState?.chargingStatus === "CHARGING" ? "[Charging ⚡️] " : vehicle.state?.electricChargingState?.isChargerConnected ? "[Plugged in 🔌]" : ""}`);
+            console.log(`├ 🏁 Odometer: ${new Intl.NumberFormat().format(vehicle.state?.currentMileage)} km`);
+            const software = vehicle.attributes?.softwareVersionCurrent;
+            console.log(`├ 🔧 iDrive${vehicle.attributes?.hmiVersion?.replace('ID', '')}: ${software.puStep?.month}/20${software.puStep?.year}.${String(software.iStep).replace(/.*(..)$/, '$1')}`);
+            console.log(`├ 📍 Location: ${vehicle.state?.location?.address?.formatted}`);
+            console.log(`├ 🚪 Doors: ${vehicle.state?.doorsState?.combinedSecurityState === 'SECURED' ? '🔒 Locked' : '🔓 Unlocked'}${vehicle.state?.doorsState?.combinedState === 'CLOSED' ? '' : ' & Open'}`);
+            console.log(`├ 🪟  Windows: ${vehicle.state?.windowsState?.combinedState === 'CLOSED' ? 'Closed' : 'Open'}`);
+
+            if (vehicle.state?.climateControlState?.activity === 'ACTIVE') {
+                console.log(`├ ☀️ Climate: ${vehicle.state?.climateControlState?.activity}`);
+            }
+            if (vehicle.state?.isDeepSleepModeActive === true) {
+                console.log(`├ 💤 Deep Sleep`);
+            }
+
+            const chargeComplete = new Date(updatedDate + (vehicle.state?.electricChargingState?.remainingChargingMinutes * 60 * 1000 ?? 0));
+            const chargingStatus = chargeState?.chargingStatus === "CHARGING" ? `[Charging ⚡️, ${chargeState.chargingTarget}% @ ${chargeComplete.toISOString().replace(/.*T|:\d\d\..*$/g, '')}]` : chargeState?.isChargerConnected ? "[Plugged in 🔌]" : "";
+            console.log(`└ 🔋 Battery: ${chargeState?.chargingLevelPercent}% (${vehicle.state?.range} km) ${chargingStatus}`);
+        }
+
+    });
+
+program
+    .command('info [vin]')
+    .description('retrieve all vehicle data. If no VIN is provided, all vehicles are returned.')
+    .option('--raw', 'list all vehicles')
+    .action(async (vin, options) => {
+        const bmw = bmwClient();
+        const res = await bmw.vehicleDetails(vin).catch(() => []);
+        if (options.raw) {
+            console.log(stringify(res.length <= 1 ? res[0] : res));
+        }
+        for (const vehicle of res) {
+            console.log(`${vehicle.attributes?.model} ${vehicle.attributes?.year} (${vehicle.vin}):`);
+            const capabilities = new Map(Object.entries(vehicle.capabilities));
+            for (const key of [...capabilities.keys()].sort()) {
+                let value = capabilities.get(key);
+
+                if (value === 'NOT_SUPPORTED') value = false;
+                if (value?.state == 'ACTIVATED') value = true;
+
+                if (["remoteChargingCommands", "vehicleStateSource", "lastStateCallState"].includes(key)) continue;
+
+                console.log(`├  ${key}: ${typeof value  === 'boolean' ? (value ? '✅' : '❌') : stringify(value)}`);
+            }
+            // console.log(`└ 🔋 Battery: ${chargeState?.chargingLevelPercent}% (${vehicle.state?.range} km) ${chargingStatus}`);
         }
 
     });

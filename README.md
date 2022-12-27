@@ -50,6 +50,7 @@ The available commands include
 * `bmw honk <vin>` to unlock the vehicle
 * `bmw list` list the vehicles associated with the account
 * `bmw status <vin>` current status info of the vehicle
+* `bmw status <vin>` build and configuration info of the vehicle
 * `bmw trip-log <vin> <date>` log of the trips the current user has made on the vehicle
 * `bmw charge-log <vin>` log of the charges for the vehicle
 
