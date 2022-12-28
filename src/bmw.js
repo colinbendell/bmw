@@ -174,6 +174,81 @@ class BMWClient {
 
         return electriVehicles;
     }
+
+    async tripHistory(vin = null, date = new Date()) {
+        const vehicles = await this.vehicles(vin);
+        for (const vehicle of vehicles) {
+            vehicle.trips = {};
+            // vehicle.trips.summary = await this.bmwClientAPI.currentMonthTripSummary(vehicle.vin);
+
+            // get all the trips for the month
+            const daily = await this.bmwClientAPI.dailyTripHistory(vehicle.vin, date, 0, 100, false);
+            while (daily?.items[0].trips?.length < daily?.quantity) {
+                const next = await this.bmwClientAPI.dailyTripHistory(vehicle.vin, date, daily?.items[0].trips?.length, 100, false);
+                daily.items[0].trips.push(...next.items[0].trips);
+            }
+
+            // group the trips by day
+            const trips = new Map();
+            for (const trip of daily.items[0].trips) {
+                const startTime = new Date(trip.startTime);
+                // we only care about the date, en-ca uses the ISO8601 format of yyyy-mm-dd unlike en-us :(
+                const day = startTime.toLocaleDateString('en-ca');
+                if (!trips.has(day)) trips.set(day, []);
+
+                // convenience function
+                trip.duration = Math.round((Date.parse(trip.endTime) - Date.parse(trip.startTime))/1000/60/60*10000)/10000;
+                trips.get(day).push(trip);
+            }
+
+            // get the monthly stats (by day)
+            const monthly = await this.bmwClientAPI.monthlyTripStatistics(vehicle.vin, date);
+
+            // merge the stats by days
+            const days = new Map();
+            for (const day of monthly.monthlyConsumption.perDayStatistics) {
+                if (!days.has(day.date)) days.set(day.date, {});
+                Object.assign(days.get(day.date), day);
+            }
+            for (const day of monthly.monthlyDistance.perDayStatistics) {
+                if (!days.has(day.date)) days.set(day.date, {});
+                Object.assign(days.get(day.date), day);
+            }
+
+            const data = {};
+            // merge in trips
+            for (const [day, value] of days.entries()) {
+                value.trips = trips.get(day);
+                value.duration = value.trips?.reduce((a, b) => a + b.duration, 0);
+                for (const key of [...Object.keys(value)].filter(k => /^accumulated/i.test(k))) {
+                    delete value[key];
+                }
+            }
+
+            Object.assign(data, daily);
+            delete data.items;
+
+            Object.assign(data, monthly);
+            Object.assign(data, monthly.monthlyConsumption);
+            delete data.monthlyConsumption;
+            delete data.perDayStatistics;
+
+            Object.assign(data, monthly.monthlyDistance);
+            delete data.monthlyDistance;
+            delete data.perDayStatistics;
+            delete data.quantity;
+
+            data.days = [...days.values()];
+            data.duration = data.days.reduce((a, b) => a + (b.duration || 0), 0);
+            data.electricDistance = data.days.reduce((a, b) => a + (b.electricDistance || 0), 0);
+            data.totalDistance = data.days.reduce((a, b) => a + (b.totalDistance || 0), 0);
+            data.totalElectricConsumption = data.days.reduce((a, b) => a + (b.totalElectricConsumption || 0), 0);
+
+            vehicle.trips = data
+        }
+
+        return vehicles;
+    }
 }
 
 module.exports = BMWClient;

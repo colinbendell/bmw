@@ -110,11 +110,11 @@ program
                 console.log(`├ ☀️ Climate: ${vehicle.state?.climateControlState?.activity}`);
             }
             if (vehicle.state?.isDeepSleepModeActive === true) {
-                console.log(`├ 💤 Deep Sleep`);
+                console.log(`├ 💤 Deep Sleep: Enabled`);
             }
 
             const chargeComplete = new Date(updatedDate + (vehicle.state?.electricChargingState?.remainingChargingMinutes * 60 * 1000 ?? 0));
-            const chargingStatus = chargeState?.chargingStatus === "CHARGING" ? `[Charging ⚡️, ${chargeState.chargingTarget}% @ ${chargeComplete.toISOString().replace(/.*T|:\d\d\..*$/g, '')}]` : chargeState?.isChargerConnected ? "[Plugged in 🔌]" : "";
+            const chargingStatus = chargeState?.chargingStatus === "CHARGING" ? `[Charging ⚡️, ${chargeState.chargingTarget}% @ ${chargeComplete.toLocaleTimeString().replace(/:\d\d\b/g, '')}]` : chargeState?.isChargerConnected ? "[Plugged in 🔌]" : "";
             console.log(`└ 🔋 Battery: ${chargeState?.chargingLevelPercent}% (${vehicle.state?.range} km) ${chargingStatus}`);
         }
 
@@ -267,6 +267,7 @@ program
     .addCommand(
         new Command('start')
         .argument('[vin]', 'VIN of the vehicle (can also be the model name)')
+        .description('Start charging the vehicle (if plugged in)')
         .action(async vin => {
             const bmw = bmwClient();
             const res = await bmw.startCharging(vin).catch(() => []);
@@ -276,6 +277,17 @@ program
     .addCommand(
         new Command('stop')
         .argument('[vin]', 'VIN of the vehicle (can also be the model name)')
+        .description('Stop charging if currently charging')
+        .action(async vin => {
+            const bmw = bmwClient();
+            const res = await bmw.stopCharging(vin).catch(() => []);
+            console.log(stringify(res.length <= 1 ? res[0] : res));
+        })
+    )
+    .addCommand(
+        new Command('unlock')
+        .argument('[vin]', 'VIN of the vehicle (can also be the model name)')
+        .description('Unlock the Stop charging if currently charging')
         .action(async vin => {
             const bmw = bmwClient();
             const res = await bmw.stopCharging(vin).catch(() => []);
@@ -283,6 +295,45 @@ program
         })
     );
 
+program
+    .command('trips [vin]')
+    .description('Trip history')
+    .option('--raw', 'raw json output')
+    .option('--long', 'detailed trip data including addresses')
+    .action(async (vin, options) => {
+        const bmw = bmwClient();
+        const res = await bmw.tripHistory(vin, new Date('2022-11-01T01:00:00Z')).catch(e => {console.error(e); return []});
+        if (options.raw) {
+            console.log(stringify(res.length <= 1 ? res[0] : res));
+        }
+        for (const vehicle of res) {
+            console.log(`${vehicle.attributes?.model} ${vehicle.attributes?.year} (${vehicle.vin}):`);
+            const distanceUnit = vehicle.trips.totalDistanceUnit;
+            let consumptionUnit;;
+            for (const day of vehicle.trips.days.sort((a, b) => Date.parse(a.date) - Date.parse(b.date))) {
+                if (day.totalDistance > 0) {
+                    consumptionUnit = consumptionUnit || day.totalElectricConsumptionUnit;
+                    const efficiency = Math.round((day.totalElectricConsumption / day.electricDistance)*100 *10)/10;
+                    const avgSpeed = Math.round((day.totalDistance / day.duration)*10)/10;
+                    const duration = new Date(day.duration*1000*60*60).toISOString().substring(11, 16).replace(":", "h ").replace(/00h |\b0+/g, "") + "m";
+                    console.log(`├ ${day.date} (${duration}): ${day.totalDistance}${distanceUnit}, ${day.totalElectricConsumption}${consumptionUnit} (${efficiency}${consumptionUnit}/100${distanceUnit}, ${avgSpeed}${distanceUnit}/h)`);
+                    if (options.long) {
+                        let tripCount = 0;
+                        for (trip of day.trips.sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime))) {
+                            const tripDur = new Date(day.duration*1000*60*60).toISOString().substring(11, 16).replace(":", "h ").replace(/00h |\b0+/g, "") + "m";
+                            const localTime = new Date(trip.startTime).toLocaleTimeString("en-gb").replace(/(\d+:\d+):\d+/, "$1");
+                            const prefix = tripCount++ === day.trips.length - 1 ? "└" : "├";
+                            console.log(`├ ${prefix} ${localTime} (${tripDur}): ${trip.addressName}`);
+                        }
+                    }
+                }
+            }
+            const efficiency = Math.round((vehicle.trips.totalElectricConsumption / vehicle.trips.electricDistance)*100 *10)/10;
+            const avgSpeed = Math.round((vehicle.trips.totalDistance / vehicle.trips.duration)*10)/10;
+            const duration = new Date(vehicle.trips.duration*1000*60*60).toISOString().substring(11, 16).replace(":", "h ").replace(/00h |\b0+/g, "") + "m";
+            console.log(`└ Total (${duration}): ${vehicle.trips.totalDistance}${distanceUnit}, ${vehicle.trips.totalElectricConsumption}${consumptionUnit} (${efficiency}${consumptionUnit}/100${distanceUnit}, ${avgSpeed}${distanceUnit}/h)`);
+        }
+    });
 
 program
     .command('debug')

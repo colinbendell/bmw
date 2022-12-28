@@ -8,14 +8,6 @@ BMW vehicles offer limited control and telemetry through the MyBMW app. This lib
 * Configuration [#authentication](#authentication)
 * Use the `bmw` [CLI](#command-line-interface)
 
-## Library Overview
-
-There are three main components to the library:
-
-* `src/bmw-api.js` - API wrapper library that manages authentication (see #auth)
-* `src/bmw.js` - the main business logic that wraps over the api calls
-* `src/bmw-cli.js` - a convenience CLI for scripting and automation
-
 ## Authentication
 
 Authentication uses the MyBMW account credentials. It can be passed through to the library using one of three ways:
@@ -33,26 +25,39 @@ Authentication uses the MyBMW account credentials. It can be passed through to t
 * pass the values directly into the constructor `new BMWClientAPI(username, password, geo)`
 
 > The valid `geo` values are: `na` (North America), `cn` (China) and `row` (Rest of World).
+
 > NB: `na` is the only one that has been really tested so far
 
 ## Command Line Interface
 
 The `./bmw` provides a number of commands to invoke the APIs through a shell script. Use `bmw --help` for expanded help details.
 
-The available commands include
+The available commands include:
 
 * `bmw login` to test the auth credentials
-* `bmw charge <vin>` to start charging the car
-* `bmw climate <vin>` to start charging the car
-* `bmw lock <vin>` to lock the vehicle
-* `bmw unlock <vin>` to unlock a specific vehicle
-* `bmw flash <vin>` to flash the lights
-* `bmw honk <vin>` to unlock the vehicle
+* `bmw charge [vin]` to start charging the car
+* `bmw climate [vin]` to start charging the car
+* `bmw lock [vin]` to lock the vehicle
+* `bmw unlock [vin]` to unlock a specific vehicle
+* `bmw flash [vin]` to flash the lights
+* `bmw honk [vin]` to unlock the vehicle
 * `bmw list` list the vehicles associated with the account
-* `bmw status <vin>` current status info of the vehicle
-* `bmw status <vin>` build and configuration info of the vehicle
-* `bmw trip-log <vin> <date>` log of the trips the current user has made on the vehicle
-* `bmw charge-log <vin>` log of the charges for the vehicle
+* `bmw info [vin]` current status info of the vehicle
+* `bmw status [vin]` build and configuration info of the vehicle
+* `bmw trips [vin] [date]` list trip information for a given month
+* `bmw charge-log [vin]` log of the charges for the vehicle
+
+> The `[vin]` is optional in all cases. If absent, all vehicles are used.
+
+> Protip: You can use parts of the model name instead of the `[vin]`. Eg: `bmw status iX`
+
+## Library Overview
+
+There are three main components to the library:
+
+* `src/bmw-api.js` - API wrapper library that manages authentication (see #auth)
+* `src/bmw.js` - the main business logic that wraps over the api calls
+* `src/bmw-cli.js` - a convenience CLI for scripting and automation
 
 ## Debugging the MyBMW App
 

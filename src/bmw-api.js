@@ -70,20 +70,15 @@ class BMWClientAPI {
                 this._token = JSON.parse(fs.readFileSync(`${process.env.HOME}/.bmwsession.json`, 'utf8'));
             }
             catch {
-
+                // noop
             }
         }
     }
 
     get brand() {return "bmw"};
     get region() {return this.auth?.geo};
-    get host() {
-        return UA[this.auth.geo]?.host;
-    }
-
-    get version() {
-        return UA[this.auth.geo]?.version;
-    }
+    get host() {  return UA[this.auth.geo]?.host; }
+    get version() { return UA[this.auth.geo]?.version; }
 
     get ocpApimSubscriptionKey() {
         try {
@@ -91,30 +86,30 @@ class BMWClientAPI {
             return b64Token.toString();
         }
         catch {
+            // noop
         }
 
         return UA[this.auth.geo]?.ocpApimSubscriptionKey;
     }
 
+    get token() {  return this._token; }
     set token(val) {
         this._token = val;
         if (val) {
             this._token.expires = Date.now() + (this._token.expires_in || 0);
-            fs.writeSync(fs.openSync(`${process.env.HOME}/.bmwsession.json`, 'w'), JSON.stringify(this._token));
+
+            try {
+                // save the token to disk for quick restart
+                fs.writeSync(fs.openSync(`${process.env.HOME}/.bmwsession.json`, 'w'), JSON.stringify(this._token));
+            }
+            catch {
+                // noop
+            }
         }
     }
 
-    get token() {
-        return this._token;
-    }
-
-    set session(val) {
-        if (val) this.auth.session = val;
-    }
-
-    get session() {
-        return this.auth?.session;
-    }
+    get session() { return this.auth?.session; }
+    set session(val) { if (val) this.auth.session = val; }
 
     async get(path = '/', headers = {}, autologin = true, httpErrorAsError = true) {
         return await this._request('GET', path, null, headers, 0, autologin, httpErrorAsError);
@@ -127,9 +122,7 @@ class BMWClientAPI {
     async _request(method = 'GET', path = '/', body = null, headers = {}, maxTTL = null, autologin = true, httpErrorAsError = true) {
         // first invocation we refresh the API tokens
         if (autologin) await this.login();
-        const targetPath = path
-            .replace('{accountID}', this.accountID)
-            .replace('{clientID}', this.clientID);
+        const targetPath = path;
 
         if (CACHE.has(method + targetPath) && maxTTL > 0) {
             const cache = CACHE.get(method + targetPath);
@@ -409,26 +402,27 @@ class BMWClientAPI {
         const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
         return await this.get(`/eadrax-chs/v1/charging-sessions/generate-report?currentDate=${startDate}&format=xlsx&vin=${vin}`, {"bmw-vin": vin});
     }
-    async tripSessions(vin, year=new Date().getUTCFullYear(), month=(new Date().getMonth() + 1)) {
-        // const iso8601_date = "2022-09-01T00:00:00Z"
-        const startDate = `${year}-${String(month).padStart(2, '0')}`;
+    async currentMonthTripSummary(vin) {
+        //"2022-09-01T00:00:00Z"
+        const timezone = new Date().toTimeString().substring(12,17).match(/.{2,3}/g).join(":");
         // eadrax-suscs/v1/vehicles/sustainability?timezone=-05%3A00
-        // eadrax-suscs/v1/vehicles/sustainability/trips/history?date=2022-11&offset=0&limit=7&groupByWeek=true&timezone=-05%3A00
-        return await this.get(`/eadrax-suscs/v1/vehicles/sustainability?timezone=-05%3A00`, {"bmw-vin": vin, "x-gcid": "b4802a8d-d2eb-4518-b0bc-23b5cb32e0de"});
+        return await this.get(`/eadrax-suscs/v1/vehicles/sustainability?timezone=${timezone}`, {"bmw-vin": vin, "x-gcid": "b4802a8d-d2eb-4518-b0bc-23b5cb32e0de"});
     }
-    async tripSessionsHistory(vin, year=new Date().getUTCFullYear(), month=(new Date().getMonth() + 1)) {
-        // const iso8601_date = "2022-09-01T00:00:00Z"
-        const startDate = `${year}-${String(month).padStart(2, '0')}`;
-        // eadrax-suscs/v1/vehicles/sustainability?timezone=-05%3A00
+    async dailyTripHistory(vin, date=new Date(), offset=0, limit=100, groupByWeek=false) {
+        //"2022-09-01T00:00:00Z"
+        const startDate = date?.toISOString()?.substring(0,7);
+        // 11:40:00 GMT-0500 (Eastern Standard Time)
+        const timezone = new Date().toTimeString().substring(12,17).match(/.{2,3}/g).join(":");
         // eadrax-suscs/v1/vehicles/sustainability/trips/history?date=2022-11&offset=0&limit=7&groupByWeek=true&timezone=-05%3A00
-        return await this.get(`/eadrax-suscs/v1/vehicles/sustainability/trips/history?date=${startDate}&offset=0&limit=7&groupByWeek=true&timezone=-05%3A00`, {"bmw-vin": vin, "x-gcid": "b4802a8d-d2eb-4518-b0bc-23b5cb32e0de"});
+        return await this.get(`/eadrax-suscs/v1/vehicles/sustainability/trips/history?date=${startDate}&offset=${offset}&limit=${limit}&groupByWeek=${groupByWeek}&timezone=${timezone}`, {"bmw-vin": vin, "x-gcid": "b4802a8d-d2eb-4518-b0bc-23b5cb32e0de"});
     }
-    async tripSessionsStatistics(vin, year=new Date().getUTCFullYear(), month=(new Date().getMonth() + 1)) {
-        // const iso8601_date = "2022-09-01T00:00:00Z"
-        const startDate = `${year}-${String(month).padStart(2, '0')}`;
-        // eadrax-suscs/v1/vehicles/sustainability?timezone=-05%3A00
-        // eadrax-suscs/v1/vehicles/sustainability/trips/history?date=2022-11&offset=0&limit=7&groupByWeek=true&timezone=-05%3A00
-        return await this.get(`/eadrax-suscs/v1/vehicles/sustainability/trips/statistics?date=${startDate}&timezone=-05%3A00`, {"bmw-vin": vin, "x-gcid": "b4802a8d-d2eb-4518-b0bc-23b5cb32e0de"});
+    async monthlyTripStatistics(vin, date=new Date()) {
+        //"2022-09-01T00:00:00Z"
+        const startDate = date?.toISOString()?.substring(0,7);
+        // 11:40:00 GMT-0500 (Eastern Standard Time)
+        const timezone = new Date().toTimeString().substring(12,17).match(/.{2,3}/g).join(":");
+
+        return await this.get(`/eadrax-suscs/v1/vehicles/sustainability/trips/statistics?date=${startDate}&timezone=${timezone}`, {"bmw-vin": vin, "x-gcid": "b4802a8d-d2eb-4518-b0bc-23b5cb32e0de"});
     }
 
     async stopCharging(vin) {
