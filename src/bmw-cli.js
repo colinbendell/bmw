@@ -354,7 +354,7 @@ program
     .action(async (vin, options) => {
         const bmw = bmwClient();
         // const res = await bmw.chargingSessionExport(vin, new Date('2022-11-01T01:00:00Z')).catch(e => {console.error(e); return []});
-        const res = await bmw.chargingHistory(vin, new Date('2022-11-01T01:00:00Z')).catch(e => {console.error(e); return []});
+        const res = await bmw.chargingHistory(vin, new Date('2022-09-01T01:00:00Z')).catch(e => {console.error(e); return []});
         if (options.raw) {
             console.log(stringify(res.length <= 1 ? res[0] : res));
         }
@@ -370,10 +370,10 @@ program
                             const localTime = new Date(session.date).toLocaleTimeString("en-gb").replace(/(\d+:\d+):\d+/, "$1");
 
                             if (session.distance > 0) {
-                                console.log(`├ ${session.day} @ ${localTime}: ${duration}, ${session.kwh} kwh (@${Math.round(session.kwhAvg)} kwh), ${session.batteryEnd}% (+${session.batteryChange}%), ${session.distance} ${distanceUnit}, ${Math.round(session.averageElectricConsumption*10)/10} kwh/100${distanceUnit} (Est. Battery: ~${Math.round(session.estimatedBatteryKwh*10)/10}kwh)`);
+                                console.log(`├ ${session.day} @ ${localTime}: ${session.locationName}, ${duration}, ${session.kwh} kwh (@${Math.round(session.kwhAvg)} kwh), ${session.batteryEnd}% (+${session.batteryChange}%), ${session.distance} ${distanceUnit}, ${Math.round(session.averageElectricConsumption*10)/10} kwh/100${distanceUnit} (Est. Battery: ~${Math.round(session.estimatedBatteryKwh*10)/10}kwh)`);
                             }
                             else {
-                                console.log(`├ ${session.day} @ ${localTime}: ${duration}, ${session.kwh} kwh (@${Math.round(session.kwhAvg)} kwh), ${session.batteryEnd}% (+${session.batteryChange}%)`);
+                                console.log(`├ ${session.day} @ ${localTime}: ${session.locationName}, ${duration}, ${session.kwh} kwh (@${Math.round(session.kwhAvg)} kwh), ${session.batteryEnd}% (+${session.batteryChange}%)`);
                             }
                         }
                 }

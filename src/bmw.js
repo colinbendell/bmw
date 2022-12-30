@@ -246,9 +246,7 @@ class BMWClient {
             // vehicle.trips.summary = await this.bmwClientAPI.currentMonthTripSummary(vehicle.vin);
 
             const summaries = [];
-            console.log(start, end, start.getDate(), start.getMonth(), end.getMonth());
             for (const date = new Date(start); date <= end; date.setMonth(date.getMonth() + 1)) {
-                console.log(date.getMonth(), start.getMonth(), end.getMonth());
                 // get all the trips for the month
                 const curr = await this.bmwClientAPI.chargingSessions(vehicle.vin, date, 50, null, false);
                 summaries.push(...curr.chargingSessions.sessions);
