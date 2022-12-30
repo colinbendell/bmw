@@ -383,32 +383,32 @@ class BMWClientAPI {
         return await this.get(`/eadrax-cps/v2/vehicles?fields=charging-plan&current_date=${currentDate}&has_charging_settings_capabilities=true`, {"bmw-vin": vin});
     }
 
-    async chargingStatistics(vin, date) {
-        const currentDate = date?.toISOString() || new Date().toISOString();
+    async chargingStatistics(vin, date = new Date()) {
+        const currentDate = date?.toISOString();
         return await this.get(`/eadrax-chs/v1/charging-statistics?vin=${vin}&currentDate=${currentDate}`);
     }
-    async chargingSessions(vin, year=new Date().getUTCFullYear(), month=(new Date().getMonth() + 1)) {
-        // const iso8601_date = "2022-09-01T00:00:00Z"
-        const startDate = `${year}-${String(month).padStart(2, '0')}-01T00%3A00%3A00.000Z`;
-        return await this.get(`/eadrax-chs/v2/charging-sessions?next_token&date=${startDate}&location_id&max_results=40&include_date_picker=false`, {"bmw-vin": vin});
+    async chargingSessions(vin, date=new Date(), limit=50, token=null, groupByWeek=false) {
+        //"2022-09-01T00:00:00Z"
+        const startDate = date?.toISOString()?.substring(0,7) + "-01T00%3A00%3A00.000Z";
+        // 11:40:00 GMT-0500 (Eastern Standard Time)
+        const timezone = new Date().toTimeString().substring(12,17).match(/.{2,3}/g).join(":");
+        return await this.get(`/eadrax-chs/v2/charging-sessions?next_token=${token || ""}&date=${startDate}&timezone=${timezone}&location_id&max_results=${limit}&include_date_picker=false`, {"bmw-vin": vin});
     }
     async chargingSessionDetails(vin, sessionId) {
-        // const iso8601_date = "2022-09-01T00:00:00Z"
-        const startDate = `${year}-${String(month).padStart(2, '0')}-01T00%3A00%3A00.000Z`;
         return await this.get(`/eadrax-chs/v2/charging-sessions/${sessionId}`, {"bmw-vin": vin});
     }
     async chargingSessionExport(vin, year=new Date().getUTCFullYear(), month=(new Date().getMonth() + 1)) {
         // const iso8601_date = "2022-09-01T00:00:00Z"
         const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-        return await this.get(`/eadrax-chs/v1/charging-sessions/generate-report?currentDate=${startDate}&format=xlsx&vin=${vin}`, {"bmw-vin": vin});
+        return await this.post(`/eadrax-chs/v1/charging-sessions/generate-report?currentDate=${startDate}&format=xlsx&vin=${vin}`, {}, {"bmw-vin": vin});
     }
-    async currentMonthTripSummary(vin) {
+    async tripCurrentMonthSummary(vin) {
         //"2022-09-01T00:00:00Z"
         const timezone = new Date().toTimeString().substring(12,17).match(/.{2,3}/g).join(":");
         // eadrax-suscs/v1/vehicles/sustainability?timezone=-05%3A00
         return await this.get(`/eadrax-suscs/v1/vehicles/sustainability?timezone=${timezone}`, {"bmw-vin": vin, "x-gcid": "b4802a8d-d2eb-4518-b0bc-23b5cb32e0de"});
     }
-    async dailyTripHistory(vin, date=new Date(), offset=0, limit=100, groupByWeek=false) {
+    async tripHistory(vin, date=new Date(), offset=0, limit=100, groupByWeek=false) {
         //"2022-09-01T00:00:00Z"
         const startDate = date?.toISOString()?.substring(0,7);
         // 11:40:00 GMT-0500 (Eastern Standard Time)
@@ -416,7 +416,13 @@ class BMWClientAPI {
         // eadrax-suscs/v1/vehicles/sustainability/trips/history?date=2022-11&offset=0&limit=7&groupByWeek=true&timezone=-05%3A00
         return await this.get(`/eadrax-suscs/v1/vehicles/sustainability/trips/history?date=${startDate}&offset=${offset}&limit=${limit}&groupByWeek=${groupByWeek}&timezone=${timezone}`, {"bmw-vin": vin, "x-gcid": "b4802a8d-d2eb-4518-b0bc-23b5cb32e0de"});
     }
-    async monthlyTripStatistics(vin, date=new Date()) {
+    async tripDetails(vin, sessionId) {
+        // 11:40:00 GMT-0500 (Eastern Standard Time)
+        const timezone = new Date().toTimeString().substring(12,17).match(/.{2,3}/g).join(":");
+        // /eadrax-suscs/v1/vehicles/sustainability/trips/summary/69f095c8-e0aa-49e3-bfc7-5af05209240b?timezone=-05%3A00
+        return await this.get(`/eadrax-suscs/v1/vehicles/sustainability/trips/summary/${sessionId}?timezone=${timezone}`, {"bmw-vin": vin, "x-gcid": "b4802a8d-d2eb-4518-b0bc-23b5cb32e0de"});
+    }
+    async tripStatistics(vin, date=new Date()) {
         //"2022-09-01T00:00:00Z"
         const startDate = date?.toISOString()?.substring(0,7);
         // 11:40:00 GMT-0500 (Eastern Standard Time)
