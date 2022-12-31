@@ -45,7 +45,7 @@ The available commands include:
 * `bmw info [vin]` current status info of the vehicle
 * `bmw status [vin]` build and configuration info of the vehicle
 * `bmw trips [vin] [date]` list trip information for a given month
-* `bmw charge-log [vin]` log of the charges for the vehicle
+* `bmw charging [vin] [date]` log of the charges for the vehicle
 
 > The `[vin]` is optional in all cases. If absent, all vehicles are used.
 

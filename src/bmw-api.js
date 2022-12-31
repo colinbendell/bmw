@@ -1,13 +1,11 @@
 /* eslint-disable require-jsdoc */
 const { Buffer } = require('node:buffer');
 const fs = require('fs');
-const {fetch} = require('@adobe/fetch').keepAlive();
+const {fetch, reset} = require('@adobe/fetch').keepAlive();
 
 const {sleep, uuid4, generate, sha256Base64} = require('./utils');
 const IniFile = require('./inifile');
 const {stringify} = require('./stringify');
-const { start } = require('node:repl');
-// const stringify = JSON.stringify;
 const DEFAULT_SESSION_ID = uuid4();
 const CACHE = new Map();
 
@@ -170,8 +168,10 @@ class BMWClientAPI {
         log.debug(options);
         const urlPrefix = targetPath.startsWith('http') ? '' : `https://${this.host}`;
         const res = await fetch(`${urlPrefix}${targetPath}`, options).catch(async e => {
-            if (!/ECONNRESET|ETIMEDOUT|ESOCKETTIMEDOUT|disconnected/.test(e.message)) log.error(e);
+            if (!/ENOTFOUND|ECONNRESET|ETIMEDOUT|ESOCKETTIMEDOUT|disconnected/.test(e.message)) log.error(e);
             // TODO: handle network errors more gracefully
+            await reset();
+            await sleep(100);
             if (autologin) return null;
             return Promise.reject(e);
         });

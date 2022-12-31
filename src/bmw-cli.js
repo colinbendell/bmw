@@ -303,7 +303,7 @@ program
     // .option('--csv', 'raw csv output') // TODO
     .action(async (vin, options) => {
         const bmw = bmwClient();
-        const res = await bmw.tripHistory(vin, new Date('2022-11-01T01:00:00Z')).catch(e => {console.error(e); return []});
+        const res = await bmw.tripHistory(vin, new Date('2022-12-01T01:00:00Z')).catch(e => {console.error(e); return []});
         if (options.raw) {
             console.log(stringify(res.length <= 1 ? res[0] : res));
         }
@@ -316,32 +316,35 @@ program
                     if (day.totalDistance > 0) {
                         consumptionUnit = consumptionUnit || day.totalElectricConsumptionUnit;
                         const avgSpeed = Math.round(day.averageSpeed*10)/10;
-                        const duration = new Date(day.totalDuration*1000*60*60).toISOString().substring(11, 16).replace(":", "h ").replace(/00h |\b0+/g, "") + "min";
+                        let duration = Math.floor(day.totalHours/24) + "d " +  Math.floor(day.totalHours%24) + "h " + Math.floor(day.totalHours*60%60) + "min";
+                        duration = duration.replaceAll(/\b(0[dh] )*/g, "");
                         const distance = Math.round(day.totalDistance*10)/10;
                         const electricConsumption = Math.round(day.totalElectricConsumption*10)/10;
                         const efficiency = Math.round(day.averageElectricConsumption *10)/10;
-                        console.log(`├ ${day.date} (${duration}): ${distance}${distanceUnit}, ${electricConsumption}${consumptionUnit} (${efficiency}${consumptionUnit}/100${distanceUnit}, ${avgSpeed}${distanceUnit}/h)`);
+                        console.log(`├ ${day.date}: ${duration}, ${distance}${distanceUnit}, ${electricConsumption}${consumptionUnit} (${efficiency}${consumptionUnit}/100${distanceUnit})`);
                         if (options.long) {
                             let tripCount = 0;
                             for (trip of day.trips.sort((a, b) => Date.parse(a.start.time) - Date.parse(b.start.time))) {
                                 const tripAvgSpeed = Math.round(trip.averageSpeed*10)/10;
-                                const tripDur = new Date(trip.duration*1000*60*60).toISOString().substring(11, 16).replace(":", "h ").replace(/00h |\b0+/g, "") + "min";
+                                let tripDur = Math.floor(trip.hours/24) + "d " +  Math.floor(trip.hours%24) + "h " + Math.floor(trip.hours*60%60) + "min";
+                                tripDur = tripDur.replaceAll(/\b(0[dh] )*/g, "");
                                 const tripDistance = Math.round(trip.distance.distance*10)/10;
                                 const tripElectricConsumption = Math.round(trip.electricConsumption.consumption*10)/10;
                                 const tripEfficiency = Math.round(trip.averageElectricConsumption *10)/10;
                                 const localTime = new Date(trip.start.time).toLocaleTimeString("en-gb").replace(/(\d+:\d+):\d+/, "$1");
                                 const prefix = tripCount++ === day.trips.length - 1 ? "└" : "├";
-                                console.log(`├ ${prefix} ${localTime} (${tripDur}): ${tripDistance}${distanceUnit}, ${tripElectricConsumption}${consumptionUnit} (${tripEfficiency}${consumptionUnit}/100${distanceUnit}, ${tripAvgSpeed}${distanceUnit}/h), ${trip.start.location.addressName}`);
+                                console.log(`├ ${prefix} @${localTime}: ${trip.start.location.addressName}, ${tripDur}, ${tripDistance}${distanceUnit}, ${tripElectricConsumption}${consumptionUnit} (${tripEfficiency}${consumptionUnit}/100${distanceUnit})`);
                             }
                         }
                     }
                 }
                 const efficiency = Math.round(vehicle.trips.averageElectricConsumption*10)/10;
                 const avgSpeed = Math.round(vehicle.trips.averageSpeed*10)/10;
-                const duration = new Date(vehicle.trips.totalDuration*1000*60*60).toISOString().substring(11, 16).replace(":", "h ").replace(/00h |\b0+/g, "") + "m";
+                let duration = Math.floor(vehicle.trips.totalHours/24) + "d " +  Math.floor(vehicle.trips.totalHours%24) + "h " + Math.floor(vehicle.trips.totalHours*60%60) + "min";
+                duration = duration.replaceAll(/\b(0[dh] )*/g, "");
                 const distance = Math.round(vehicle.trips.totalDistance*10)/10;
                 const electricConsumption = Math.round(vehicle.trips.totalElectricConsumption*10)/10;
-                console.log(`└ Total (${duration}): ${distance}${distanceUnit}, ${electricConsumption}${consumptionUnit} (${efficiency}${consumptionUnit}/100${distanceUnit}, ${avgSpeed}${distanceUnit}/h)`);
+                console.log(`└ Total: ${duration}, ${distance}${distanceUnit}, ${electricConsumption}${consumptionUnit} (${efficiency}${consumptionUnit}/100${distanceUnit})`);
             }
         }
     });
@@ -349,12 +352,17 @@ program
 program
     .command('charging [vin]')
     .description('Charging history')
+    .option('--start <start>', 'Start Date')
+    .option('--end <end>', 'End Date')
     .option('--raw', 'raw json output')
     // .option('--csv', 'raw csv output') // TODO
     .action(async (vin, options) => {
+        if (!Date.parse(options.start)) options.start = new Date();
+        if (!Date.parse(options.end)) options.end = new Date();
+
         const bmw = bmwClient();
         // const res = await bmw.chargingSessionExport(vin, new Date('2022-11-01T01:00:00Z')).catch(e => {console.error(e); return []});
-        const res = await bmw.chargingHistory(vin, new Date('2022-09-01T01:00:00Z')).catch(e => {console.error(e); return []});
+        const res = await bmw.chargingHistory(vin, options.start, options.end).catch(e => {console.error(e); return []});
         if (options.raw) {
             console.log(stringify(res.length <= 1 ? res[0] : res));
         }
@@ -365,20 +373,24 @@ program
                 const distanceUnit = charging.sessions[0]?.odometerUnit;
 
                 for (const session of charging.sessions.sort((a, b) => Date.parse(a.date) - Date.parse(b.date))) {
-                        if (session.batteryChange > 1) {
-                            const duration = new Date(session.minutes*1000*60).toISOString().substring(11, 16).replace(":", "h ").replace(/00h |\b0+/g, "") + "m";
+                        if (session.batteryDiff > 1) {
+                            let duration = Math.floor(session.minutes/24/60) + "d " +  Math.floor(session.minutes/60%24) + "h " + Math.floor(session.minutes%60) + "min";
+                            duration = duration.replaceAll(/\b(0[dh] )*/g, "");
+
                             const localTime = new Date(session.date).toLocaleTimeString("en-gb").replace(/(\d+:\d+):\d+/, "$1");
 
                             if (session.distance > 0) {
-                                console.log(`├ ${session.day} @ ${localTime}: ${session.locationName}, ${duration}, ${session.kwh} kwh (@${Math.round(session.kwhAvg)} kwh), ${session.batteryEnd}% (+${session.batteryChange}%), ${session.distance} ${distanceUnit}, ${Math.round(session.averageElectricConsumption*10)/10} kwh/100${distanceUnit} (Est. Battery: ~${Math.round(session.estimatedBatteryKwh*10)/10}kwh)`);
+                                console.log(`├ ${session.day}: ${duration}, ${session.kwh} kwh (${Math.round(session.kwhAvg)} kwh), ${session.batteryEnd}% (+${session.batteryDiff}%), ${session.distance} ${distanceUnit}, ${Math.round(session.averageElectricConsumption*10)/10} kwh/100${distanceUnit}`);
                             }
                             else {
-                                console.log(`├ ${session.day} @ ${localTime}: ${session.locationName}, ${duration}, ${session.kwh} kwh (@${Math.round(session.kwhAvg)} kwh), ${session.batteryEnd}% (+${session.batteryChange}%)`);
+                                console.log(`├ ${session.day}: ${duration}, ${session.kwh} kwh (${Math.round(session.kwhAvg)} kwh), ${session.batteryEnd}% (+${session.batteryDiff}%)`);
                             }
                         }
                 }
-                const duration = new Date(charging.minutes*1000*60).toISOString().substring(11, 16).replace(":", "h ").replace(/00h |\b0+/g, "") + "m";
-                console.log(`└ Total: ${duration}, ${charging.kwh} kwh (@${Math.round(charging.kwhAvg)} kwh), +${charging.batteryChange}%, ${charging.distance} ${distanceUnit}, ${Math.round(charging.averageElectricConsumption*10)/10} kwh/100${distanceUnit} (Est. Battery: ~${Math.round(charging.estimatedBatteryKwh*10)/10}kwh)`);
+                // const duration = new Date(charging.minutes*1000*60).toISOString().substring(11, 16).replace(":", "h ").replace(/00h |\b0+/g, "") + "m";
+                let duration = Math.floor(charging.minutes/24/60) + "d " +  Math.floor(charging.minutes/60%24) + "h " + Math.floor(charging.minutes%60) + "min";
+                duration = duration.replaceAll(/\b(0[dh] )*/g, "");
+                console.log(`└ Total: ${duration}, ${charging.kwh} kwh (${Math.round(charging.kwhAvg)} kwh), +${charging.batteryDiff}%, ${charging.distance} ${distanceUnit}, ${Math.round(charging.averageElectricConsumption*10)/10} kwh/100${distanceUnit} (Est. Battery: ~${Math.round(charging.estimatedBatteryKwh*10)/10}kwh)`);
             }
         }
     });
