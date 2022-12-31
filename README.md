@@ -44,8 +44,8 @@ The available commands include:
 * `bmw list` list the vehicles associated with the account
 * `bmw info [vin]` current status info of the vehicle
 * `bmw status [vin]` build and configuration info of the vehicle
-* `bmw trips [vin] [date]` list trip information for a given month
-* `bmw charging [vin] [date]` log of the charges for the vehicle
+* `bmw trips [vin]` list trip information for a given month
+* `bmw charging [vin]` log of the charges for the vehicle
 
 > The `[vin]` is optional in all cases. If absent, all vehicles are used.
 
@@ -118,4 +118,22 @@ Other oddities to be aware of:
 * It's unclear why bmw requires a session context when they provide oauth keys. I suspect that there are 3 different infrastructur teams at play managing server affinity, authorization and other contexts.
 * Many of the APIs also do content-negotiation through the use of HTTP headers. For example `bmw-units-preferences: d=KM;v=L`, `country: uk`, `24-hour-format: true`.
 * Despite doing conneg with these HTTP headres, the response is missing `Vary:` to communicate the variances of the content
-* `bmw-correlation-id` and `x-correlation-id` appear to be OTP Spans for tracing. It's kind of silly really to have the same header twice.
+* `bmw-correlation-id` and `x-correlation-id` appear to be OTP Spans for tracing. It's kind of silly really to have the same header twice
+* pagination sometimes uses `?offset=` + `?limit=` while other times uses `?next_token=` and `max_results=`. (see: `/eadrax-suscs/v1/vehicles/sustainability/trips/history` and `/eadrax-chs/v2/charging-sessions` respectively)
+* naming conventions are very inconsistent. sometimes it's snake_case othertimes it's camel_case!
+* Most of the apis behave like apis. However, the Charging Sessions API is a for-purpose UX api. (`/eadrax-chs/v2/charging-sessions`). The `startDate` is pre-formated to some version of US date/time rather than ISO8601 (sometimes it says 'yesterday' other times it will have a mm/dd/yyyy formatted date)
+* the `timelineItems` array is a litteral json version of html with styling:
+
+    ```json
+    {
+        "body": {"actionType": "CHARGING_TYPE_UNSPECIFIED", "isEnabled": true, "subtitle": "Saturday 16:36", "title": "Plugged in"},
+        "hasDivider": false,
+        "leading": {
+            "alignment": "CENTER", "backgroundColor": "TRANSPARENT", "backgroundOpacity": 1, "borderColor": "CONTENT_ACCENT", "borderOpacity": 1,
+            "bottomLineColor": "PRIMARY", "bottomLineOpacity": 1, "color": "PRIMARY", "iconCode": 59692, "opacity": 1, "topLineColor": "TRANSPARENT",
+            "topLineOpacity": 1
+        },
+        "trailing": {"actionType": "CHARGING_TYPE_UNSPECIFIED", "iconCode": 59694, "text": "57%"}
+    },
+    ```
+* dns for `cocoapi.bmwgroup.us` is unreliable and sometimes times-out. We need error capture and retry logic to manage this.
