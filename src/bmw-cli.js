@@ -298,12 +298,17 @@ program
 program
     .command('trips [vin]')
     .description('Trip history')
+    .option('--start <start>', 'Start Date')
+    .option('--end <end>', 'End Date')
     .option('--long', 'detailed trip data including addresses')
     .option('--raw', 'raw json output')
     // .option('--csv', 'raw csv output') // TODO
     .action(async (vin, options) => {
+        if (!Date.parse(options.start)) options.start = new Date();
+        if (!Date.parse(options.end)) options.end = new Date();
+
         const bmw = bmwClient();
-        const res = await bmw.tripHistory(vin, new Date('2022-12-01T01:00:00Z')).catch(e => {console.error(e); return []});
+        const res = await bmw.tripHistory(vin, start, end).catch(e => {console.error(e); return []});
         if (options.raw) {
             console.log(stringify(res.length <= 1 ? res[0] : res));
         }
