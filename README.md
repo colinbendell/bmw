@@ -136,4 +136,5 @@ Other oddities to be aware of:
         "trailing": {"actionType": "CHARGING_TYPE_UNSPECIFIED", "iconCode": 59694, "text": "57%"}
     },
     ```
-* dns for `cocoapi.bmwgroup.us` is unreliable and sometimes times-out. We need error capture and retry logic to manage this.
+
+* dns for `cocoapi.bmwgroup.us` is unreliable and sometimes times-out. We need error capture and retry logic to manage this

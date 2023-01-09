@@ -1,5 +1,5 @@
 const BMWClientAPI = require('./bmw-api');
-const { sleep } = require('./utils');
+const { sleep, sum, parseRelativeDate} = require('./utils');
 
 class BMWClient {
     constructor(username, password, region) {
@@ -248,77 +248,111 @@ class BMWClient {
             // vehicle.trips.summary = await this.bmwClientAPI.currentMonthTripSummary(vehicle.vin);
 
             const summaries = [];
-            for (const date = new Date(start); date <= end; date.setMonth(date.getMonth() + 1)) {
+            const priorMonth = new Date(start);
+            priorMonth.setUTCMonth(priorMonth.getUTCMonth() - 1);
+
+            for (const date = priorMonth; date <= end; date.setUTCMonth(date.getUTCMonth() + 1)) {
                 // get all the trips for the month
+                const currSummaries = []
                 const curr = await this.bmwClientAPI.chargingSessions(vehicle.vin, date, 50, null, false);
-                summaries.push(...curr.chargingSessions.sessions);
-                while (summaries.length < curr.chargingSessions?.numberOfSessions) {
+                currSummaries.push(...curr.chargingSessions.sessions);
+                while (currSummaries.length < curr.chargingSessions?.numberOfSessions) {
                     const next = await this.bmwClientAPI.chargingSessions(vehicle.vin, date, 50, curr.paginationInfo?.nextToken, false);
-                    summaries.push(...next.chargingSessions.sessions);
+                    currSummaries.push(...next.chargingSessions.sessions);
                     curr.paginationInfo = next.paginationInfo;
+                }
+
+                // only add the summaries for the query months plus the last charge of prior month
+                // this is an akward way to do it...
+                if (date >= start) {
+                    summaries.push(...currSummaries);
+                }
+                else {
+                    const lastSession = currSummaries.sort((a, b) => b.id.localeCompare(a.id))[0];
+                    summaries.push(lastSession);
                 }
             }
 
             // group the trips by day and get details for each trip
-            const sessions = [];
+            let sessions = [];
             await Promise.all(summaries.map(async chargeSummary => {
                 const session = await this.bmwClientAPI.chargingSessionDetails(vehicle.vin, chargeSummary.id);
 
-                // convenience function. we use the id to parse the date because the date is not always parseable
+                // not sure why the date format uses the US format instead of ISO8601 like everrything else
+                session.date = parseRelativeDate(session.date);
+                let timezone = 0;
                 if (Date.parse(chargeSummary.id.split('_')[0]) > 0) {
-                    session.date = new Date(chargeSummary.id.split('_')[0]);
+                    // convenience function. we use the id to parse the date because the date is not always parseable
+                    const trueDate = new Date(chargeSummary.id.split('_')[0]).toISOString();
+                    timezone = (Date.parse(trueDate) - Date.parse(session.date))/60/60/1000;
+                    session.date = trueDate;
                 }
-                else {
-                  // not sure why the date format uses the US format instead of ISO8601 like everrything else
-                    session.date = new Date(session.date.replace(/(\d+)\/(\d+)\/(\d+) (\d+:\d+)/, "$3-0$1-0$2T0$4").replaceAll(/(\b|T)0(\d\d)/g, "$1$2"));
-                    session.startDate = new Date(session.startDate.replace(/(\d+)\/(\d+)\/(\d+) (\d+:\d+)/, "$3-0$1-0$2T0$4").replaceAll(/(\b|T)0(\d\d)/g, "$1$2"));
-                    session.endDate = new Date(session.endDate.replace(/(\d+)\/(\d+)\/(\d+) (\d+:\d+)/, "$3-0$1-0$2T0$4").replaceAll(/(\b|T)0(\d\d)/g, "$1$2"));
-                }
-                session.day = session.date.toLocaleDateString('en-ca');
-                // session.duration = (Date.parse(endDate) - Date.parse(startDate))/1000/60;
+                session.startDate = parseRelativeDate(session.startDate, timezone);
+                session.endDate = parseRelativeDate(session.endDate, timezone);
+
+                session.day = new Date(session.date).toLocaleDateString('en-ca');
                 session.odometer = Number.parseInt(session.totalMileage.replace(/[^0-9]/g, ''));
-                session.odometerUnit = session.totalMileage.replace(/[0-9, ]/g, '');
+                session.distanceUnit = session.totalMileage.replace(/[0-9, ]/g, '');
+                session[session.distanceUnit] = session.odometer;
                 session.kwh = Number.parseFloat(session.energyCharged.replace(/[^0-9.]/g, ''));
                 // duration is in minutes
                 session.minutes = Number.parseInt(session.duration.replace(/(\d+)h.*|.*/, '$1') || 0) * 60 + parseInt(session.duration.replace(/.*?(\d+)min.*/, '$1') || 0);
                 session.batteryStart = Number.parseInt(session.startBatteryPc.replace(/[^0-9]/g, ''));
                 session.batteryEnd = Number.parseInt(session.endBatteryPc.replace(/[^0-9]/g, ''));
-                session.batteryDiff = session.batteryEnd - session.batteryStart;
+                session.batteryCharged = session.batteryEnd - session.batteryStart;
                 session.kwhAvg = session.kwh / (session.minutes / 60);
+                const [,latitute, longitude] = session.vehicleLocationId.split(':');
+                session.latitute = Number.parseFloat(latitute);
+                session.longitude = Number.parseFloat(longitude);
+
+                delete session.totalMileage;
+                delete session.energyCharged;
+                delete session.duration;
+                delete session.startBatteryPc;
+                delete session.endBatteryPc
+                delete session.vehicleLocationId
                 sessions.push(session);
             }));
 
+            sessions = sessions
+                .filter(s => s.batteryCharged > 0)
+                .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+
             let lastSession;
-            for (const session of sessions.sort((a, b) => Date.parse(a.date) - Date.parse(b.date))) {
-                if (session.batteryDiff > 1) {
-                    if (lastSession) {
-                        session.distance = session.odometer - lastSession.odometer;
-                        session.odometerLast = lastSession.odometer;
-                        if (session.distance <= 1) {
-                            session.distance = session.odometer - lastSession.odometerLast;
-                            session.odometerLast = lastSession.odometerLast;
-                        }
-                        session.batteryLastEnd = lastSession.batteryEnd;
-                        session.batteryLastUsed = lastSession.batteryEnd - session.batteryStart;
-                        session.averageElectricConsumption = (session.kwh * (session.batteryLastUsed / session.batteryDiff)) / session.distance * 100;
-                        session.estimatedBatteryKwh = session.kwh / session.batteryDiff * 100;
+            for (const session of sessions) {
+                if (lastSession) {
+                    session.distance = session.odometer - lastSession.odometer;
+                    session.odometerLast = lastSession.odometer;
+                    session.batteryLastEnd = lastSession.batteryEnd;
+                    session.batteryUsedSinceLastCharge = session.batteryLastEnd - session.batteryStart;
+                    session.averageElectricConsumption = (session.kwh * (session.batteryUsedSinceLastCharge / session.batteryCharged)) / session.distance * 100;
+
+                    if (session.distance <= 1) {
+                        session.averageElectricConsumption = null;
                     }
-                    lastSession = session;
+                    session.estimatedBatteryKwh = session.kwh / session.batteryCharged * 100;
                 }
+                lastSession = session;
             }
 
-            vehicle.charging.sessions = sessions;
+            const firstOdometer = Math.min(...sessions.map(s => s.odometer));
+            const lastOdometer = Math.max(...sessions.map(s => s.odometer));
+            vehicle.charging.distanceUnit = sessions[0].distanceUnit;
+            vehicle.charging.distance = lastOdometer - firstOdometer;
 
-            vehicle.charging.distance = sessions.filter(s => s.estimatedBatteryKwh > 0 ).reduce((a, b) => a + (b.distance || 0), 0);
-            vehicle.charging.batteryLastUsed = sessions.filter(s => s.estimatedBatteryKwh > 0 ).reduce((a, b) => a + (b.batteryLastUsed || 0), 0);
-            vehicle.charging.batteryDiff = sessions.filter(s => s.estimatedBatteryKwh > 0 ).reduce((a, b) => a + (b.batteryDiff || 0), 0);
-            vehicle.charging.kwh = sessions.filter(s => s.estimatedBatteryKwh > 0 ).reduce((a, b) => a + (b.kwh || 0), 0);
-            vehicle.charging.minutes = sessions.filter(s => s.estimatedBatteryKwh > 0 ).reduce((a, b) => a + (b.minutes || 0), 0);
-            vehicle.charging.averageElectricConsumption = (vehicle.charging.kwh * (vehicle.charging.batteryLastUsed / vehicle.charging.batteryDiff)) / vehicle.charging.distance * 100;
-            vehicle.charging.estimatedBatteryKwh = vehicle.charging.kwh / vehicle.charging.batteryDiff * 100;
+            vehicle.charging.sessions = sessions.filter(s => Date.parse(s.date) >= Date.parse(start));
+
+            vehicle.charging.batteryUsedSinceLastCharge = sum(...vehicle.charging.sessions.map(s => s.batteryUsedSinceLastCharge));
+            vehicle.charging.batteryCharged = sum(...vehicle.charging.sessions.map(s => s.batteryCharged));
+
+            vehicle.charging.kwh = sum(...vehicle.charging.sessions.map(s => s.kwh));
+            vehicle.charging.minutes = sum(...vehicle.charging.sessions.map(s => s.minutes));
+            vehicle.charging.averageElectricConsumption = vehicle.charging.kwh / vehicle.charging.distance * 100;
+            vehicle.charging.estimatedBatteryKwh = vehicle.charging.kwh / vehicle.charging.batteryCharged * 100;
             vehicle.charging.kwhAvg = vehicle.charging.kwh / (vehicle.charging.minutes / 60);
         }
         return vehicles;
     };
 }
+
 module.exports = BMWClient;

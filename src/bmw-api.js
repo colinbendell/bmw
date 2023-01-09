@@ -170,8 +170,8 @@ class BMWClientAPI {
         const res = await fetch(`${urlPrefix}${targetPath}`, options).catch(async e => {
             if (!/ENOTFOUND|ECONNRESET|ETIMEDOUT|ESOCKETTIMEDOUT|disconnected/.test(e.message)) log.error(e);
             // TODO: handle network errors more gracefully
-            await reset();
-            await sleep(100);
+            // await reset();
+            // await sleep(100);
             if (autologin) return null;
             return Promise.reject(e);
         });

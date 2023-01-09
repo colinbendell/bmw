@@ -2,6 +2,7 @@ const BMWClientAPI = require('./bmw-api');
 const BMWClient = require('./bmw');
 const {Command} = require('commander');
 const {stringify} = require("./stringify");
+const {formatNumber, formatMinutes} = require("./utils");
 const program = new Command();
 
 function bmwClient() {
@@ -99,7 +100,7 @@ program
             const updatedDate = Date.parse(vehicle.state?.lastUpdateDate);
             const chargeState = vehicle.state?.electricChargingState;
             console.log(`${vehicle.attributes?.model} ${vehicle.attributes?.year} (${vehicle.vin}):`);
-            console.log(`├ 🏁 Odometer: ${new Intl.NumberFormat().format(vehicle.state?.currentMileage)} km`);
+            console.log(`├ 🏁 Odometer: ${formatNumber(vehicle.state?.currentMileage, 'km')}`);
             const software = vehicle.attributes?.softwareVersionCurrent;
             console.log(`├ 🔧 iDrive${vehicle.attributes?.hmiVersion?.replace('ID', '')}: ${software.puStep?.month}/20${software.puStep?.year}.${String(software.iStep).replace(/.*(..)$/, '$1')}`);
             console.log(`├ 📍 Location: ${vehicle.state?.location?.address?.formatted}`);
@@ -359,8 +360,8 @@ program
     .description('Charging history')
     .option('--start <start>', 'Start Date')
     .option('--end <end>', 'End Date')
+    .option('--csv', 'csv output')
     .option('--raw', 'raw json output')
-    // .option('--csv', 'raw csv output') // TODO
     .action(async (vin, options) => {
         if (!Date.parse(options.start)) options.start = new Date();
         if (!Date.parse(options.end)) options.end = new Date();
@@ -371,31 +372,30 @@ program
         if (options.raw) {
             console.log(stringify(res.length <= 1 ? res[0] : res));
         }
+        if (options.csv) {
+            for (const vehicle of res) {
+                const keys = Object.keys(vehicle.charging.sessions[0]).filter(k => !['timelineItems', 'totalCost', 'pluginIssue'].includes(k));
+                console.log(keys.join(','));
+
+                for (const session of vehicle.charging.sessions) {
+                    console.log(keys.map(k => String(session[k]).replaceAll(/,/g, '')).join(','));
+                }
+
+            }
+        }
         else {
             for (const vehicle of res) {
                 console.log(`${vehicle.attributes?.model} ${vehicle.attributes?.year} (${vehicle.vin}):`);
                 const charging = vehicle.charging;
-                const distanceUnit = charging.sessions[0]?.odometerUnit;
-
-                for (const session of charging.sessions.sort((a, b) => Date.parse(a.date) - Date.parse(b.date))) {
-                        if (session.batteryDiff > 1) {
-                            let duration = Math.floor(session.minutes/24/60) + "d " +  Math.floor(session.minutes/60%24) + "h " + Math.floor(session.minutes%60) + "min";
-                            duration = duration.replaceAll(/\b(0[dh] )*/g, "");
-
-                            const localTime = new Date(session.date).toLocaleTimeString("en-gb").replace(/(\d+:\d+):\d+/, "$1");
-
-                            if (session.distance > 0) {
-                                console.log(`├ ${session.day}: ${duration}, ${session.kwh} kwh (${Math.round(session.kwhAvg)} kwh), ${session.batteryEnd}% (+${session.batteryDiff}%), ${session.distance} ${distanceUnit}, ${Math.round(session.averageElectricConsumption*10)/10} kwh/100${distanceUnit}`);
-                            }
-                            else {
-                                console.log(`├ ${session.day}: ${duration}, ${session.kwh} kwh (${Math.round(session.kwhAvg)} kwh), ${session.batteryEnd}% (+${session.batteryDiff}%)`);
-                            }
-                        }
+                for (const session of charging.sessions) {
+                    const localTime = new Date(session.date).toLocaleTimeString("en-gb").replace(/(\d+:\d+):\d+/, "$1");
+                    console.log(`${session.day} - ${session.locationName} (@${session.kwhAvg?.toFixed(1)}kwh)`);
+                    console.log(` ⏱️  ${formatMinutes(session.minutes)} ${formatNumber(session.kwh, 'kwh')}`);
+                    console.log(` 🏁 Odometer: ${formatNumber(session.odometer, 'km')} (+${formatNumber(session.distance, session.distanceUnit)})`);
+                    console.log(` 🔋 Battery: ${session.batteryEnd}% (-${session.batteryUsedSinceLastCharge}% +${session.batteryCharged}%), ${formatNumber(session.averageElectricConsumption?.toFixed(1), "kwh/100" + session.distanceUnit, false)}`);
+                    console.log(` 🏎️  Consumption: ${formatNumber(session.averageElectricConsumption?.toFixed(1), "kwh/100" + session.distanceUnit, false)}`);
                 }
-                // const duration = new Date(charging.minutes*1000*60).toISOString().substring(11, 16).replace(":", "h ").replace(/00h |\b0+/g, "") + "m";
-                let duration = Math.floor(charging.minutes/24/60) + "d " +  Math.floor(charging.minutes/60%24) + "h " + Math.floor(charging.minutes%60) + "min";
-                duration = duration.replaceAll(/\b(0[dh] )*/g, "");
-                console.log(`└ Total: ${duration}, ${charging.kwh} kwh (${Math.round(charging.kwhAvg)} kwh), +${charging.batteryDiff}%, ${charging.distance} ${distanceUnit}, ${Math.round(charging.averageElectricConsumption*10)/10} kwh/100${distanceUnit} (Est. Battery: ~${Math.round(charging.estimatedBatteryKwh*10)/10}kwh)`);
+                console.log(`└ Total: ${formatMinutes(charging.minutes)}, ${formatNumber(charging.kwh?.toFixed(1), 'kwh', false)}, +${charging.batteryCharged}%, ${formatNumber(charging.distance, charging.distanceUnit)}, ${formatNumber(charging.averageElectricConsumption?.toFixed(1), "kwh/100" + charging.distanceUnit, false)} (Est. Battery: ~${formatNumber(charging.estimatedBatteryKwh?.toFixed(1), "kwh", false)})`);
             }
         }
     });
