@@ -223,7 +223,8 @@ class BMWClientAPI {
         else if (res.status === 429) {
             // TODO: how do we get out of infinite retry?
             log.error(`RETRY: ${method} ${targetPath} (${res.headers.get('status') || res.status + ' ' + res.statusText})`);
-            await sleep(500);
+            const retryDur = res.headers.get('retry-after') * 1000 || 500;
+            await sleep(retryDur);
             return this._request(method, path, body, maxTTL, false, httpErrorAsError);
         }
         else if (res.status === 409) {

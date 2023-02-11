@@ -175,16 +175,19 @@ class BMWClient {
         return electriVehicles;
     }
 
-    async tripHistory(vin = null, date = new Date()) {
+    async tripHistory(vin = null, start = new Date(), end = new Date()) {
+        start = new Date(start);
+        end = new Date(end);
+
         const vehicles = await this.vehicles(vin);
         for (const vehicle of vehicles) {
             vehicle.trips = {};
             // vehicle.trips.summary = await this.bmwClientAPI.currentMonthTripSummary(vehicle.vin);
 
             // get all the trips for the month
-            const daily = await this.bmwClientAPI.tripHistory(vehicle.vin, date, 0, 100, false);
+            const daily = await this.bmwClientAPI.tripHistory(vehicle.vin, start, 0, 100, false);
             while (daily?.items[0].trips?.length < daily?.quantity) {
-                const next = await this.bmwClientAPI.tripHistory(vehicle.vin, date, daily?.items[0].trips?.length, 100, false);
+                const next = await this.bmwClientAPI.tripHistory(vehicle.vin, start, daily?.items[0].trips?.length, 100, false);
                 daily.items[0].trips.push(...next.items[0].trips);
             }
 
@@ -195,15 +198,18 @@ class BMWClient {
                 const trip = detail.trip;
 
                 // convenience function
-                // duration is in hours
-                trip.hours = (Date.parse(detail.trip?.end?.time) - Date.parse(detail.trip?.start?.time))/1000/60/60;
+                // duration is in minutes
+                trip.minutes = Math.round((Date.parse(detail.trip?.end?.time) - Date.parse(detail.trip?.start?.time))/1000)/60;
                 trip.electricDistance = trip.distance.distance; //TODO: what about PHEV?
-                trip.averageSpeed = trip.distance.distance / trip.hours;
-                trip.averageElectricConsumption = trip.electricConsumption.consumption / trip.distance.distance * 100;
+                trip.batteryUsed = trip.start.energyState.electric - trip.end.energyState.electric;
+                trip.averageSpeed = trip.distance.distance / trip.minutes * 60;
+                trip.kwh = trip.electricConsumption.consumption;
+                trip.averageElectricConsumption = trip.kwh / trip.distance.distance * 100;
+                trip.estimatedBatteryKWh = trip.kwh / trip.batteryUsed * 100;
 
                 const startTime = new Date(trip.start?.time);
                 // we only care about the date, en-ca uses the ISO8601 format of yyyy-mm-dd unlike en-us :(
-                const day = startTime.toLocaleDateString('en-ca');
+                const day = startTime.toLocaleDateString('fr-ca');
 
                 if (!days.has(day)) days.set(day, {date: day, trips: []});
                 days.get(day).trips.push(trip);
@@ -211,27 +217,29 @@ class BMWClient {
 
             // we could use monthlyTripStatistics() but the values are inaccurate so we have to calculate them ourselves
             for (const day of days.values()) {
-                day.totalHours = day.trips.reduce((a, b) => a + (b.hours || 0), 0);
-                day.totalElectricDistance = day.trips.reduce((a, b) => a + (b.electricDistance || 0), 0);
-                day.totalDistance = day.trips.reduce((a, b) => a + (b.distance?.distance || 0), 0);
+                day.totalBatteryUsed = sum(...day.trips.map(t => t.batteryUsed));
+                day.totalMinutes = sum(...day.trips.map(t => t.minutes))
+                day.totalElectricDistance = sum(...day.trips.map(t => t.electricDistance));
+                day.totalDistance = sum(...day.trips.map(t => t.distance?.distance));
                 day.totalDistanceUnit = day.trips[0]?.distance?.distanceUnit;
-                day.totalElectricConsumption = day.trips.reduce((a, b) => a + (b.electricConsumption?.consumption || 0), 0);
-                day.totalElectricConsumptionUnit = day.trips[0]?.electricConsumption?.consumptionUnit;
-                day.averageSpeed = day.totalDistance / day.totalHours;
-                day.averageElectricConsumption = day.totalElectricConsumption / day.totalElectricDistance * 100;
+                day.totalKWh = sum(...day.trips.map(t => t.kwh));
+                day.averageSpeed = day.totalDistance / day.totalMinutes * 60;
+                day.averageElectricConsumption = day.totalKWh / day.totalElectricDistance * 100;
+                day.estimatedBatteryKWh = day.totalKWh / day.totalBatteryUsed * 100;
+
             }
 
             const data = {};
             data.days = [...days.values()];
-
-            data.totalHours = data.days.reduce((a, b) => a + (b.totalHours || 0), 0);
-            data.totalElectricDistance = data.days.reduce((a, b) => a + (b.totalElectricDistance || 0), 0);
-            data.totalDistance = data.days.reduce((a, b) => a + (b.totalDistance || 0), 0);
+            data.totalBatteryUsed = sum(...data.days.map(d => d.totalBatteryUsed));
+            data.totalMinutes = sum(...data.days.map(d => d.totalMinutes));
+            data.totalElectricDistance = sum(...data.days.map(d => d.totalElectricDistance));
+            data.totalDistance = sum(...data.days.map(d => d.totalDistance));
             data.totalDistanceUnit = data.days[0]?.totalDistanceUnit;
-            data.totalElectricConsumption = data.days.reduce((a, b) => a + (b.totalElectricConsumption || 0), 0);
-            data.averageSpeed = data.totalDistance / data.totalHours;
-            data.averageElectricConsumption = data.totalElectricConsumption / data.totalElectricDistance * 100;
-            data.totalElectricConsumptionUnit = data.days[0]?.totalElectricConsumptionUnit;
+            data.totalKWh = sum(...data.days.map(d => d.totalKWh));
+            data.averageSpeed = data.totalDistance / data.totalMinutes  * 60;
+            data.averageElectricConsumption = data.totalKWh / data.totalElectricDistance * 100;
+            data.estimatedBatteryKWh = data.totalKWh / data.totalBatteryUsed * 100;
 
             vehicle.trips = data
         }
@@ -265,11 +273,13 @@ class BMWClient {
                 // only add the summaries for the query months plus the last charge of prior month
                 // this is an akward way to do it...
                 if (date >= start) {
-                    summaries.push(...currSummaries);
+                    if (currSummaries && currSummaries.length > 0) {
+                        summaries.push(...currSummaries);
+                    }
                 }
                 else {
                     const lastSession = currSummaries.sort((a, b) => b.id.localeCompare(a.id))[0];
-                    summaries.push(lastSession);
+                    if (lastSession) summaries.push(lastSession);
                 }
             }
 
@@ -290,7 +300,7 @@ class BMWClient {
                 session.startDate = parseRelativeDate(session.startDate, timezone);
                 session.endDate = parseRelativeDate(session.endDate, timezone);
 
-                session.day = new Date(session.date).toLocaleDateString('en-ca');
+                session.day = new Date(session.date).toLocaleDateString('fr-ca');
                 session.odometer = Number.parseInt(session.totalMileage.replace(/[^0-9]/g, ''));
                 session.distanceUnit = session.totalMileage.replace(/[0-9, ]/g, '');
                 session[session.distanceUnit] = session.odometer;
@@ -301,8 +311,8 @@ class BMWClient {
                 session.batteryEnd = Number.parseInt(session.endBatteryPc.replace(/[^0-9]/g, ''));
                 session.batteryCharged = session.batteryEnd - session.batteryStart;
                 session.kwhAvg = session.kwh / (session.minutes / 60);
-                const [,latitute, longitude] = session.vehicleLocationId.split(':');
-                session.latitute = Number.parseFloat(latitute);
+                const [,latitude, longitude] = session.vehicleLocationId.split(':');
+                session.latitude = Number.parseFloat(latitude);
                 session.longitude = Number.parseFloat(longitude);
 
                 delete session.totalMileage;

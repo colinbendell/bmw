@@ -9,7 +9,7 @@ const fahrenheitToCelsius = temperature => Math.round((temperature - 32) / 1.8 *
 const celsiusToFahrenheit = temperature => Math.round((temperature * 1.8) + 32);
 
 const sum = function(...values) {
-    return values.reduce((a, b) => a + (Number.parseInt(b) || 0), 0);
+    return values.reduce((a, b) => a + (Number.parseFloat(b) || 0), 0);
 }
 
 const parseRelativeDate = function(v, timezoneOffset = 0) {
@@ -43,10 +43,13 @@ const parseRelativeDate = function(v, timezoneOffset = 0) {
 }
 
 const formatNumber = function(value, unit = '', round = true) {
-    if (value === undefined) {
+    if (value === undefined || value === null || value === '') {
         return 'N/A';
     }
     value = Number(value);
+    if (value === Number.POSITIVE_INFINITY || value === Number.NEGATIVE_INFINITY) {
+        return 'N/A';
+    }
 
     // has fraction digits
     if (!Number.isInteger(value) && round) {
@@ -75,6 +78,12 @@ const formatMinutes = function(minutes) {
     return duration;
 }
 
+const formatLocalTime = function(date) {
+    // return new Date(date).toLocaleString('en-US', { timeZone: 'America/New_York' });
+
+    return new Date(date).toLocaleTimeString("en-gb").replace(/(\d+:\d+):\d+/, "$1")
+}
+
 module.exports = {
     sleep,
     uuid4,
@@ -86,4 +95,5 @@ module.exports = {
     parseRelativeDate,
     formatNumber,
     formatMinutes,
+    formatLocalTime,
 };
