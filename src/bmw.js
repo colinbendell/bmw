@@ -219,29 +219,29 @@ class BMWClient {
 
             // we could use monthlyTripStatistics() but the values are inaccurate so we have to calculate them ourselves
             for (const day of days.values()) {
-                day.totalBatteryUsed = sum(...day.trips.map(t => t.batteryUsed));
-                day.totalMinutes = sum(...day.trips.map(t => t.minutes))
-                day.totalElectricDistance = sum(...day.trips.map(t => t.electricDistance));
-                day.totalDistance = sum(...day.trips.map(t => t.distance?.distance));
-                day.totalDistanceUnit = day.trips[0]?.distance?.distanceUnit;
-                day.totalKWh = sum(...day.trips.map(t => t.kwh));
-                day.averageSpeed = day.totalDistance / day.totalMinutes * 60;
-                day.averageElectricConsumption = day.totalKWh / day.totalElectricDistance * 100;
-                day.estimatedBatteryKWh = day.totalKWh / day.totalBatteryUsed * 100;
+                day.batteryUsed = sum(...day.trips.map(t => t.batteryUsed));
+                day.minutes = sum(...day.trips.map(t => t.minutes))
+                day.electricDistance = sum(...day.trips.map(t => t.electricDistance));
+                day.distance = sum(...day.trips.map(t => t.distance?.distance));
+                day.distanceUnit = day.trips[0]?.distance?.distanceUnit;
+                day.kwh = sum(...day.trips.map(t => t.kwh));
+                day.averageSpeed = day.distance / day.minutes * 60;
+                day.averageElectricConsumption = day.kwh / day.electricDistance * 100;
+                day.estimatedBatteryKWh = day.kwh / day.batteryUsed * 100;
 
             }
 
             const data = {};
             data.days = [...days.values()];
-            data.totalBatteryUsed = sum(...data.days.map(d => d.totalBatteryUsed));
-            data.totalMinutes = sum(...data.days.map(d => d.totalMinutes));
-            data.totalElectricDistance = sum(...data.days.map(d => d.totalElectricDistance));
-            data.totalDistance = sum(...data.days.map(d => d.totalDistance));
-            data.totalDistanceUnit = data.days[0]?.totalDistanceUnit;
-            data.totalKWh = sum(...data.days.map(d => d.totalKWh));
-            data.averageSpeed = data.totalDistance / data.totalMinutes  * 60;
-            data.averageElectricConsumption = data.totalKWh / data.totalElectricDistance * 100;
-            data.estimatedBatteryKWh = data.totalKWh / data.totalBatteryUsed * 100;
+            data.batteryUsed = sum(...data.days.map(d => d.batteryUsed));
+            data.minutes = sum(...data.days.map(d => d.minutes));
+            data.electricDistance = sum(...data.days.map(d => d.electricDistance));
+            data.distance = sum(...data.days.map(d => d.distance));
+            data.distanceUnit = data.days[0]?.distanceUnit;
+            data.kwh = sum(...data.days.map(d => d.kwh));
+            data.averageSpeed = data.distance / data.minutes  * 60;
+            data.averageElectricConsumption = data.kwh / data.electricDistance * 100;
+            data.estimatedBatteryKWh = data.kwh / data.batteryUsed * 100;
 
             vehicle.trips = data
         }

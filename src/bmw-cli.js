@@ -327,19 +327,21 @@ program
         if (options.raw) {
             console.log(stringify(res.length <= 1 ? res[0] : res));
         }
+        if (options.json) {
+
+        }
         else {
             for (const vehicle of res) {
                 if (res[0] !== vehicle) console.log();
                 console.log(`${vehicle.attributes?.model} ${vehicle.attributes?.year} (${vehicle.vin}):`);
-                const distanceUnit = vehicle.trips.totalDistanceUnit;
                 for (const day of vehicle.trips.days.sort((a, b) => Date.parse(a.date) - Date.parse(b.date))) {
-                    if (day.totalDistance > 0) {
-                        // const avgSpeed = formatNumber(day.averageSpeed, `${distanceUnit}/h`);
+                    if (day.distance > 0) {
+                        // const avgSpeed = formatNumber(day.averageSpeed, `${day.distanceUnit}/h`);
                         if (options.short) {
                             console.log(`${day.date}`);
-                            console.log(` 🏁 Travel: ${formatNumber(day.totalDistance, distanceUnit)} (${formatMinutes(day.totalMinutes)})`);
-                            console.log(` ⚡️ Energy: ${formatNumber(day.totalKWh, "KWh")} (-${formatNumber(day.totalBatteryUsed)}% 🪫)`);
-                            console.log(` 🌎 Efficiency: ${formatNumber(day.averageElectricConsumption?.toFixed(1), 'kWh/100' + distanceUnit, false)}`);
+                            console.log(` 🏁 Travel: ${formatNumber(day.distance, day.distanceUnit)} (${formatMinutes(day.minutes)})`);
+                            console.log(` ⚡️ Energy: ${formatNumber(day.kwh, "KWh")} (-${formatNumber(day.batteryUsed)}% 🪫 )`);
+                            console.log(` 🌎 Efficiency: ${formatNumber(day.averageElectricConsumption?.toFixed(1), 'kWh/100' + day.distanceUnit, false)}`);
                         }
                         else {
                             const trips = day.trips
@@ -348,23 +350,23 @@ program
 
                             for (const trip of trips) {
                                 console.log(`${day.date} @ ${formatLocalTime(trip.start.time)}`);
-                                console.log(` 🏁 Travel: ${formatNumber(trip.distance.distance, distanceUnit)} (${formatMinutes(trip.minutes)})`);
+                                console.log(` 🏁 Travel: ${formatNumber(trip.distance.distance, trip.distance.distanceUnit)} (${formatMinutes(trip.minutes)})`);
 
                                 let location = options.h3 ? `h3:${h3.latLngToCell(trip.start.location.latitude, trip.start.location.longitude, 15)}` : `${trip.start.location.latitude.toFixed(3)},${trip.start.location.longitude.toFixed(3)}`;
                                 console.log(` 📍 Start: ${trip.start.location.addressName.split(',')[0]} (${location})`);
 
                                 location = options.h3 ? `h3:${h3.latLngToCell(trip.end.location.latitude, trip.end.location.longitude, 15)}` : `${trip.end.location.latitude.toFixed(3)},${trip.end.location.longitude.toFixed(3)}`;
                                 console.log(` 📍 End: ${trip.end.location.addressName.split(',')[0]} (${location})`);
-                                console.log(` ⚡️ Energy: ${formatNumber(trip.kwh, "KWh")} (-${formatNumber(trip.batteryUsed)}% 🪫)`);
-                                console.log(` 🌎 Efficiency: ${formatNumber(trip.averageElectricConsumption?.toFixed(1), 'KWh/100' + distanceUnit, false)}`);
+                                console.log(` ⚡️ Energy: ${formatNumber(trip.kwh, "KWh")} (-${formatNumber(trip.batteryUsed)}% 🪫 )`);
+                                console.log(` 🌎 Efficiency: ${formatNumber(trip.averageElectricConsumption?.toFixed(1), 'KWh/100' + trip.distance.distanceUnit, false)}`);
                             }
                         }
                     }
                 }
-                const duration = formatMinutes(vehicle.trips.totalMinutes);
-                const distance = formatNumber(vehicle.trips.totalDistance, distanceUnit);
-                const consumption = formatNumber(vehicle.trips.totalKWh, "KWh");
-                const efficiency = formatNumber(vehicle.trips.averageElectricConsumption, `KWh/100${distanceUnit}`);
+                const duration = formatMinutes(vehicle.trips.minutes);
+                const distance = formatNumber(vehicle.trips.distance, vehicle.trips.distanceUnit);
+                const consumption = formatNumber(vehicle.trips.kWh, "KWh");
+                const efficiency = formatNumber(vehicle.trips.averageElectricConsumption, `KWh/100${vehicle.trips.distanceUnit}`);
                 const estBatteryKWh = formatNumber(vehicle.trips.estimatedBatteryKWh?.toFixed(1), "KWh", false);
                 console.log(`Total: ${duration}, ${distance}, ${consumption}, ${efficiency} (Est. Battery: ~${estBatteryKWh})`);
             }
@@ -414,7 +416,7 @@ program
                     console.log(` 🔋 End: ${session.batteryEnd}% (+${session.batteryCharged}%)`);
                     console.log(` 🌎 Efficiency: ${formatNumber(session.averageElectricConsumption?.toFixed(1), "kwh/100" + session.distanceUnit, false)}`);
                 }
-                console.log(`Total: ${formatMinutes(charging.minutes)}, ${formatNumber(charging.kwh?.toFixed(1), 'kwh', false)}, +${charging.batteryCharged}%, ${formatNumber(charging.distance, charging.distanceUnit)}, ${formatNumber(charging.averageElectricConsumption?.toFixed(1), "kwh/100" + charging.distanceUnit, false)} (Est. Battery: ~${formatNumber(charging.estimatedBatteryKwh?.toFixed(1), "kwh", false)})`);
+                console.log(`Total: ${formatMinutes(charging.minutes)}, ${formatNumber(charging.kwh?.toFixed(1), 'kwh', false)}, ${formatNumber(charging.distance, charging.distanceUnit)}, ${formatNumber(charging.averageElectricConsumption?.toFixed(1), "kwh/100" + charging.distanceUnit, false)} (Est. Battery: ~${formatNumber(charging.estimatedBatteryKwh?.toFixed(1), "kwh", false)})`);
             }
         }
     });
