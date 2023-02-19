@@ -177,6 +177,8 @@ class BMWClient {
 
     async tripHistory(vin = null, start = new Date(), end = new Date()) {
         start = new Date(start);
+        start.setUTCDate(1);
+        start.setUTCHours(0, 0, 0, 0);
         end = new Date(end);
 
         const vehicles = await this.vehicles(vin);
@@ -249,6 +251,8 @@ class BMWClient {
 
     async chargingHistory(vin = null, start = new Date(), end = new Date()) {
         start = new Date(start);
+        start.setUTCDate(1);
+        start.setUTCHours(0, 0, 0, 0);
         end = new Date(end);
         const vehicles = await this.vehicles(vin);
         for (const vehicle of vehicles) {
@@ -258,7 +262,6 @@ class BMWClient {
             const summaries = [];
             const priorMonth = new Date(start);
             priorMonth.setUTCMonth(priorMonth.getUTCMonth() - 1);
-
             for (const date = priorMonth; date <= end; date.setUTCMonth(date.getUTCMonth() + 1)) {
                 // get all the trips for the month
                 const currSummaries = []

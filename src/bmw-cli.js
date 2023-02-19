@@ -99,29 +99,35 @@ program
         }
         else {
             for (const vehicle of res) {
+                if (res[0] !== vehicle) console.log();
                 const updatedDate = Date.parse(vehicle.state?.lastUpdatedAt ?? vehicle.state?.lastUpdatedDate);
                 const chargeState = vehicle.state?.electricChargingState;
                 console.log(`${vehicle.attributes?.model} ${vehicle.attributes?.year} (${vehicle.vin}):`);
-                console.log(`├ 🏁 Odometer: ${formatNumber(vehicle.state?.currentMileage, 'km')}`);
+                console.log(`🏁 Odometer: ${formatNumber(vehicle.state?.currentMileage, 'km')}`);
                 const software = vehicle.attributes?.softwareVersionCurrent;
-                console.log(`├ 🔧 iDrive${vehicle.attributes?.hmiVersion?.replace('ID', '')}: ${software.puStep?.month}/20${software.puStep?.year}.${String(software.iStep).replace(/.*(..)$/, '$1')}`);
+                console.log(`🔧 iDrive${vehicle.attributes?.hmiVersion?.replace('ID', '')}: ${software.puStep?.month}/20${software.puStep?.year}.${String(software.iStep).replace(/.*(..)$/, '$1')}`);
                 const lat = vehicle.state?.location?.coordinates?.latitude;
                 const long = vehicle.state?.location?.coordinates?.longitude;
-                const h3loc = `h3:${(lat + long) ? h3.latLngToCell(lat, long, 15) : ''}`;
-                console.log(`├ 📍 Location: ${vehicle.state?.location?.address?.formatted} ${lat.toFixed(3)},${long.toFixed(3)}`);
-                console.log(`├ 🚪 Doors: ${["LOCKED", "SECURED"].includes(vehicle.state?.doorsState?.combinedSecurityState) ? '🔒 Locked' : 'Unlocked'}${vehicle.state?.doorsState?.combinedState === 'CLOSED' ? '' : ' & Open'}`);
-                console.log(`├ 🪟  Windows: ${vehicle.state?.windowsState?.combinedState === 'CLOSED' ? 'Closed' : 'Open'}`);
+                const location = options.h3 ? `h3:${(lat + long) ? h3.latLngToCell(lat, long, 15) : ''}` : `${lat.toFixed(3)},${long.toFixed(3)}`;
+                console.log(`📍 Location: ${vehicle.state?.location?.address?.formatted} (${location})`);
+                console.log(`🚪 Doors: ${["LOCKED", "SECURED"].includes(vehicle.state?.doorsState?.combinedSecurityState) ? '🔒 Locked' : 'Unlocked'}${vehicle.state?.doorsState?.combinedState === 'CLOSED' ? '' : ' & Open'}`);
+                console.log(`🪟  Windows: ${vehicle.state?.windowsState?.combinedState === 'CLOSED' ? 'Closed' : 'Open'}`);
 
                 if (vehicle.state?.climateControlState?.activity === 'ACTIVE') {
-                    console.log(`├ ☀️ Climate: ${vehicle.state?.climateControlState?.activity}`);
+                    console.log(`☀️ Climate: ${vehicle.state?.climateControlState?.activity}`);
                 }
                 if (vehicle.state?.isDeepSleepModeActive === true) {
-                    console.log(`├ 💤 Deep Sleep: Enabled`);
+                    console.log(`💤 Deep Sleep: Enabled`);
                 }
 
-                const chargeComplete = new Date(updatedDate + (vehicle.state?.electricChargingState?.remainingChargingMinutes * 60 * 1000 ?? 0));
-                const chargingStatus = chargeState?.chargingStatus === "CHARGING" ? `[Charging ⚡️, ETA:${chargeState.chargingTarget}% in ${formatMinutes(vehicle.state?.electricChargingState?.remainingChargingMinutes)}]` : chargeState?.isChargerConnected ? "[Plugged in 🔌]" : "";
-                console.log(`└ 🔋 Battery: ${chargeState?.chargingLevelPercent}% (${vehicle.state?.range} km) ${chargingStatus}`);
+                console.log(`🔋 Battery: ${chargeState?.chargingLevelPercent}% (${vehicle.state?.range} km)`);
+
+                if (chargeState?.isChargerConnected) {
+                    console.log(`🔌 Pluged In`);
+                }
+                if (chargeState?.chargingStatus === "CHARGING") {
+                    console.log(`⚡️ Charging: ${chargeState.chargingTarget}% in ${formatMinutes(vehicle.state?.electricChargingState?.remainingChargingMinutes)}`);
+                }
             }
         }
     });
@@ -306,7 +312,8 @@ program
     .description('Trip history')
     .option('--start <start>', 'Start Date')
     .option('--end <end>', 'End Date')
-    .option('--long', 'detailed trip data including addresses')
+    .option('--h3', 'show h3 coordinates instead of lat/lon')
+    .option('--short', 'short trip data grouped by day')
     .option('--raw', 'original raw json output')
     .option('--json', 'json output')
     .option('--csv', 'csv output')
@@ -322,47 +329,44 @@ program
         }
         else {
             for (const vehicle of res) {
+                if (res[0] !== vehicle) console.log();
                 console.log(`${vehicle.attributes?.model} ${vehicle.attributes?.year} (${vehicle.vin}):`);
                 const distanceUnit = vehicle.trips.totalDistanceUnit;
-                const consumptionUnit = vehicle.trips.days.reduce((acc, day) => acc || day.totalElectricConsumptionUnit, null);
                 for (const day of vehicle.trips.days.sort((a, b) => Date.parse(a.date) - Date.parse(b.date))) {
                     if (day.totalDistance > 0) {
                         // const avgSpeed = formatNumber(day.averageSpeed, `${distanceUnit}/h`);
-                        const duration = formatMinutes(day.totalMinutes);
-                        const distance = formatNumber(day.totalDistance, distanceUnit);
-                        const consumption = formatNumber(day.totalKWh, "KWh");
-                        const efficiency = formatNumber(day.averageElectricConsumption, `kWh/100${distanceUnit}`);
-                        const batteryUsed = formatNumber(day.totalBatteryUsed) + "%"
-                        const estBatteryKWh = formatNumber(day.estimatedBatteryKWh?.toFixed(1), "KWh", false)
-                        console.log(`├ ${day.date}: ${duration}, ${distance}, ${consumption} (${efficiency}, Battery -${batteryUsed} ${estBatteryKWh})`);
-                    }
-                    if (options.long) {
-                        const trips = day.trips
-                            .filter(trip => trip.distance.distance > 0)
-                            .sort((a, b) => Date.parse(a.start.time) - Date.parse(b.start.time));
+                        if (options.short) {
+                            console.log(`${day.date}`);
+                            console.log(` 🏁 Travel: ${formatNumber(day.totalDistance, distanceUnit)} (${formatMinutes(day.totalMinutes)})`);
+                            console.log(` ⚡️ Energy: ${formatNumber(day.totalKWh, "KWh")} (-${formatNumber(day.totalBatteryUsed)}% 🪫)`);
+                            console.log(` 🌎 Efficiency: ${formatNumber(day.averageElectricConsumption?.toFixed(1), 'kWh/100' + distanceUnit, false)}`);
+                        }
+                        else {
+                            const trips = day.trips
+                                .filter(trip => trip.distance.distance > 0)
+                                .sort((a, b) => Date.parse(a.start.time) - Date.parse(b.start.time));
 
-                        let tripCount = 0;
-                        for (const trip of trips) {
-                            const prefix = tripCount++ === day.trips.length - 1 ? "└" : "├";
-                            const localTime = formatLocalTime(trip.start.time);
-                            const duration = formatMinutes(trip.minutes);
-                            const distance = formatNumber(trip.distance.distance, distanceUnit);
-                            const consumption = formatNumber(trip.kwh, "KWh");
-                            const efficiency = formatNumber(trip.averageElectricConsumption?.toFixed(1), `KWh/100${distanceUnit}`, false);
-                            const batteryUsed = formatNumber(trip.batteryUsed) + "%"
-                            const estBatteryKWh = formatNumber(trip.estimatedBatteryKWh?.toFixed(1), "KWh", false)
-                            console.log(`├ ${prefix} ${localTime}: ${trip.start.location.addressName}, ${duration}, ${distance}, ${consumption} (${efficiency}, Battery -${batteryUsed} ${estBatteryKWh})`);
+                            for (const trip of trips) {
+                                console.log(`${day.date} @ ${formatLocalTime(trip.start.time)}`);
+                                console.log(` 🏁 Travel: ${formatNumber(trip.distance.distance, distanceUnit)} (${formatMinutes(trip.minutes)})`);
+
+                                let location = options.h3 ? `h3:${h3.latLngToCell(trip.start.location.latitude, trip.start.location.longitude, 15)}` : `${trip.start.location.latitude.toFixed(3)},${trip.start.location.longitude.toFixed(3)}`;
+                                console.log(` 📍 Start: ${trip.start.location.addressName.split(',')[0]} (${location})`);
+
+                                location = options.h3 ? `h3:${h3.latLngToCell(trip.end.location.latitude, trip.end.location.longitude, 15)}` : `${trip.end.location.latitude.toFixed(3)},${trip.end.location.longitude.toFixed(3)}`;
+                                console.log(` 📍 End: ${trip.end.location.addressName.split(',')[0]} (${location})`);
+                                console.log(` ⚡️ Energy: ${formatNumber(trip.kwh, "KWh")} (-${formatNumber(trip.batteryUsed)}% 🪫)`);
+                                console.log(` 🌎 Efficiency: ${formatNumber(trip.averageElectricConsumption?.toFixed(1), 'KWh/100' + distanceUnit, false)}`);
+                            }
                         }
                     }
-            }
-                // const avgSpeed = formatNumber(vehicle.trips.averageSpeed, `${distanceUnit}/h`);
+                }
                 const duration = formatMinutes(vehicle.trips.totalMinutes);
                 const distance = formatNumber(vehicle.trips.totalDistance, distanceUnit);
                 const consumption = formatNumber(vehicle.trips.totalKWh, "KWh");
                 const efficiency = formatNumber(vehicle.trips.averageElectricConsumption, `KWh/100${distanceUnit}`);
-                const batteryUsed = formatNumber(vehicle.trips.totalBatteryUsed) + "%"
-                const estBatteryKWh = formatNumber(vehicle.trips.estimatedBatteryKWh?.toFixed(1), "KWh", false)
-                console.log(`└ Total: ${duration}, ${distance}, ${consumption} (${efficiency}, Battery -${batteryUsed} ${estBatteryKWh})`);
+                const estBatteryKWh = formatNumber(vehicle.trips.estimatedBatteryKWh?.toFixed(1), "KWh", false);
+                console.log(`Total: ${duration}, ${distance}, ${consumption}, ${efficiency} (Est. Battery: ~${estBatteryKWh})`);
             }
         }
     });
@@ -397,18 +401,20 @@ program
         }
         else {
             for (const vehicle of res) {
+                if (res[0] !== vehicle) console.log();
                 console.log(`${vehicle.attributes?.model} ${vehicle.attributes?.year} (${vehicle.vin}):`);
                 const charging = vehicle.charging;
                 for (const session of charging.sessions) {
                     console.log(`${session.day}  🏁 ${formatNumber(session.odometer, 'km')}`);
-                    console.log(` 📍 ${session.locationName} (${session.latitude.toFixed(3)},${session.longitude.toFixed(3)})`);
+                    const location = options.h3 ? `h3:${h3.latLngToCell(session.latitude, session.longitude, 15)}` : `${session.latitude.toFixed(3)},${session.longitude.toFixed(3)}`;
+                    console.log(` 📍 ${session.locationName} (${location})`);
                     console.log(` 🏁 Travel: ${formatNumber(session.distance, session.distanceUnit)}`);
                     console.log(` 🪫  Start: ${session.batteryStart}% (-${session.batteryUsedSinceLastCharge}%)`);
                     console.log(` ⚡️ Charge: ${formatNumber(session.kwh, 'kwh')} (⏱️ ${formatMinutes(session.minutes)} @${session.kwhAvg?.toFixed(1)}kwh)`);
                     console.log(` 🔋 End: ${session.batteryEnd}% (+${session.batteryCharged}%)`);
-                    console.log(` 🏎️  Consumption: ${formatNumber(session.averageElectricConsumption?.toFixed(1), "kwh/100" + session.distanceUnit, false)}`);
+                    console.log(` 🌎 Efficiency: ${formatNumber(session.averageElectricConsumption?.toFixed(1), "kwh/100" + session.distanceUnit, false)}`);
                 }
-                console.log(`➡️ Total: ${formatMinutes(charging.minutes)}, ${formatNumber(charging.kwh?.toFixed(1), 'kwh', false)}, +${charging.batteryCharged}%, ${formatNumber(charging.distance, charging.distanceUnit)}, ${formatNumber(charging.averageElectricConsumption?.toFixed(1), "kwh/100" + charging.distanceUnit, false)} (Est. Battery: ~${formatNumber(charging.estimatedBatteryKwh?.toFixed(1), "kwh", false)})`);
+                console.log(`Total: ${formatMinutes(charging.minutes)}, ${formatNumber(charging.kwh?.toFixed(1), 'kwh', false)}, +${charging.batteryCharged}%, ${formatNumber(charging.distance, charging.distanceUnit)}, ${formatNumber(charging.averageElectricConsumption?.toFixed(1), "kwh/100" + charging.distanceUnit, false)} (Est. Battery: ~${formatNumber(charging.estimatedBatteryKwh?.toFixed(1), "kwh", false)})`);
             }
         }
     });

@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@adobe/fetch": "^4",
+    "@adobe/fetch": "^3",
     "commander": "^10",
     "formdata-node": "^5",
     "h3-js": "^4.1.0"
