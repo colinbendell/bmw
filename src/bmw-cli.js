@@ -5,6 +5,8 @@ const {stringify} = require("./stringify");
 const {formatNumber, formatMinutes, formatLocalTime} = require("./utils");
 const h3 = require("h3-js");
 const program = new Command();
+const crypto = require('crypto');
+const fs = require('fs');
 
 function bmwClient() {
     return new BMWClient(program.opts().email, program.opts().password, program.opts().geo);
@@ -50,23 +52,40 @@ program
     });
 
 program
-    .command('flags')
-    .option('--csv', 'output as CSV')
-    .option('--raw', 'output as raw JSON')
-    .description('Report Application Flags enabled on account')
-    .action(async options => {
+    .command('flags [vin]')
+    .option('--json', 'output as JSON')
+    .description('Report Application Flags and vehicle attributes')
+    .action(async (vin, options) => {
         const bmw = bmwClient();
-        const res = await bmw.userFlags().catch(() => [])
-        if (options.raw) {
-            console.log(stringify(res));
+        const userFlags = await bmw.userFlags().catch(() => []);
+        const vehicles = await bmw.vehicleDetails(vin, false, false).catch(() => []);
+        if (options.json) {
+            const output = { vehicles: [], flags: {foo:{}}};
+            for (const flag of userFlags.flags) {
+                output.flags[flag.flagId] = flag.isActive;
+            }
+            output.vehicles = vehicles.map(vehicle => {
+                delete vehicle.attributes.driverGuideInfo;
+                return {
+                    vin: vehicle.vin,
+                    appVehicleType: vehicle.appVehicleType,
+                    attributes: vehicle.attributes,
+                    mappingInfo: vehicle.mappingInfo,
+                    capabilities: vehicle.capabilities,
+                }
+            });
+            console.log(stringify(output));
         }
         else {
-            for (const flag of res.flags) {
-                if (options.csv) {
-                    console.log(`${flag.flagId},${flag.isActive}`);
-                }
-                else {
-                    console.log(`${flag.flagId} - ${flag.isActive ? '✅' : '❌'}`);
+            for (const flag of userFlags.flags) {
+                console.log(`${flag.flagId} - ${flag.isActive ? '✅' : '❌'}`);
+            }
+
+            for (const vehicle of vehicle) {
+                console.log();
+                console.log(`${vehicle.attributes?.model} ${vehicle.attributes?.year} (${vehicle.vin}):`);
+                for (const [capability, value] of Object.entries(vehicle.capabilities)) {
+                    console.log(`${capability} - ${typeof(value) === 'boolean' ? (value ? '✅' : '❌') : stringify(value, 0, null)}`);
                 }
             }
         }
@@ -90,12 +109,45 @@ program
 program
     .command('status [vin]')
     .description('retrieve all vehicle data. If no VIN is provided, all vehicles are returned.')
-    .option('--raw', 'list all vehicles')
+    .option('--json', 'output summary in json')
+    .option('--only-changed', 'only output changed values')
     .action(async (vin, options) => {
         const bmw = bmwClient();
-        const res = await bmw.vehicleDetails(vin).catch(() => []);
-        if (options.raw) {
-            console.log(stringify(res.length <= 1 ? res[0] : res));
+        const res = await bmw.vehicleDetails(vin, false, false).catch(() => []);
+        if (options.json) {
+            for (const vehicle of res) {
+                const output = {
+                    vin: vehicle.vin,
+                    km: vehicle.state?.currentMileage,
+                    updatedAt: new Date(Date.parse(vehicle.state?.lastUpdatedAt ?? vehicle.state?.lastUpdatedDate)).toISOString(),
+                    latitude: vehicle.state?.location?.coordinates?.latitude,
+                    longitude: vehicle.state?.location?.coordinates?.longitude,
+                    heading: vehicle.state?.location?.heading,
+                    address: vehicle.state?.location?.address?.formatted,
+                    h3:  h3.latLngToCell(vehicle.state?.location?.coordinates?.latitude, vehicle.state?.location?.coordinates?.longitude, 15),
+                    battery: vehicle.state?.electricChargingState?.chargingLevelPercent,
+                    pluggedIn: vehicle.state?.electricChargingState?.isChargerConnected,
+                    charging: vehicle.state?.electricChargingState?.chargingStatus === "CHARGING",
+                    chargingMinutes: vehicle.state?.electricChargingState?.remainingChargingMinutes,
+                    deepSleep: vehicle.state?.isDeepSleepModeActive,
+                    climate: vehicle.state?.climateControlState?.activity === 'ACTIVE',
+                }
+                if (options.onlyChanged) {
+                    try {
+                        const lockFile = `${process.env.HOME}/.bmw${vehicle.vin}.lock`;
+                        const lastHash = fs.existsSync(lockFile) ? fs.readFileSync(lockFile, 'utf8') : '';
+                        const hash = crypto.createHash('md5').update(`${output.vin}${output.km}${output.latitude}${output.longitude}${output.battery}${output.pluggedIn}${output.charging}${output.deepSleep}`).digest('hex');
+                        fs.writeSync(fs.openSync(lockFile, 'w'), hash)
+                        if (hash === lastHash) {
+                            return;
+                        }
+                    }
+                    catch {
+                        // noop
+                    }
+                }
+                console.log(stringify(output, 0, null, {forceKeyOrder: ['vin', 'updatedAt', 'km', 'battery', 'latitude', 'longitude', 'heading', 'address', 'h3', 'pluggedIn', 'charging', 'chargingMinutes', 'deepSleep', 'climate']}));
+            }
         }
         else {
             for (const vehicle of res) {
@@ -390,7 +442,7 @@ program
         if (options.raw) {
             console.log(stringify(res.length <= 1 ? res[0] : res));
         }
-        if (options.csv) {
+        else if (options.csv) {
             for (const vehicle of res) {
                 const keys = Object.keys(vehicle.charging.sessions[0]).filter(k => !['timelineItems', 'totalCost', 'pluginIssue'].includes(k));
                 console.log(keys.join(','));
@@ -398,6 +450,7 @@ program
                 for (const session of vehicle.charging.sessions) {
                     console.log(keys.map(k => String(session[k]).replaceAll(/,/g, '')).join(','));
                 }
+                console.log(keys);
 
             }
         }

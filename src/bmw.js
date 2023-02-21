@@ -25,14 +25,19 @@ class BMWClient {
         return res;
     }
 
-    async vehicleDetails(vin = null) {
+    async vehicleDetails(vin = null, includeRecalls = true, includeCharging = true) {
         const vehicles = await this.vehicles(vin);
         for (const vehicle of vehicles) {
             const state = await this.bmwClientAPI.vehicleState(vehicle.vin);
-            const chargingSettings = await this.bmwClientAPI.vehicleChargeSettings(vehicle.vin);
-            const chargeState = await this.bmwClientAPI.vehicleChargeState(vehicle.vin);
-            vehicle.recalls = await this.bmwClientAPI.vehicleRecalls(vehicle.vin);
-            Object.assign(vehicle, state, chargingSettings, chargeState);
+            Object.assign(vehicle, state);
+            if (includeCharging) {
+                const chargingSettings = await this.bmwClientAPI.vehicleChargeSettings(vehicle.vin);
+                const chargeState = await this.bmwClientAPI.vehicleChargeState(vehicle.vin);
+                Object.assign(vehicle, chargingSettings, chargeState);
+            }
+            if (includeRecalls) {
+                vehicle.recalls = await this.bmwClientAPI.vehicleRecalls(vehicle.vin);
+            }
         }
         return vehicles;
     }
@@ -249,7 +254,7 @@ class BMWClient {
         return vehicles;
     }
 
-    async chargingHistory(vin = null, start = new Date(), end = new Date()) {
+    async chargingHistory(vin = null, start = new Date(), end = new Date(), excludeNoCharge = true) {
         start = new Date(start);
         start.setUTCDate(1);
         start.setUTCHours(0, 0, 0, 0);
@@ -328,7 +333,7 @@ class BMWClient {
             }));
 
             sessions = sessions
-                .filter(s => s.batteryCharged > 0)
+                .filter(s => !excludeNoCharge || s.batteryCharged > 0)
                 .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
 
             let lastSession;
@@ -345,7 +350,9 @@ class BMWClient {
                     }
                     session.estimatedBatteryKwh = session.kwh / session.batteryCharged * 100;
                 }
-                lastSession = session;
+                if (session.batteryCharged > 0) {
+                    lastSession = session;
+                }
             }
 
             const firstOdometer = Math.min(...sessions.map(s => s.odometer));

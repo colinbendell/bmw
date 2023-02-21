@@ -203,7 +203,7 @@ class BMWClientAPI {
             // if the API call resulted in 401 Unauthorized (token expired?), try logging in again.
             if (autologin) {
                 await this.login(true);
-                return this._request(method, path, body, maxTTL, false, httpErrorAsError);
+                return this._request(method, path, body, headers, maxTTL, false, httpErrorAsError);
             }
             // fallback
             // TODO: handle error states more gracefully
@@ -218,14 +218,14 @@ class BMWClientAPI {
             log.error(`RETRY: ${method} ${targetPath} (${res.headers.get('status') || res.status + ' ' + res.statusText})`);
             this.token = null; // force a re-login if 5xx errors
             await sleep(1000);
-            return this._request(method, path, body, maxTTL, false, httpErrorAsError);
+            return this._request(method, path, body, headers, maxTTL, false, httpErrorAsError);
         }
         else if (res.status === 429) {
             // TODO: how do we get out of infinite retry?
             log.error(`RETRY: ${method} ${targetPath} (${res.headers.get('status') || res.status + ' ' + res.statusText})`);
             const retryDur = res.headers.get('retry-after') * 1000 || 500;
             await sleep(retryDur);
-            return this._request(method, path, body, maxTTL, false, httpErrorAsError);
+            return this._request(method, path, body, headers, maxTTL, false, httpErrorAsError);
         }
         else if (res.status === 409) {
             if (httpErrorAsError) {
