@@ -6,8 +6,9 @@ const {fetch, reset} = require('@adobe/fetch').keepAlive();
 const {sleep, uuid4, generate, sha256Base64} = require('./utils');
 const IniFile = require('./inifile');
 const {stringify} = require('./stringify');
+const { SimpleCache } = require('./simple-cache');
 const DEFAULT_SESSION_ID = uuid4();
-const CACHE = new Map();
+const CACHE = new SimpleCache('bmwapi');
 
 const Regions = {
     NORTH_AMERICA: "na",
@@ -48,7 +49,6 @@ const UA = {
     // }
 }
 
-
 const log = console;
 
 class BMWClientAPI {
@@ -62,15 +62,6 @@ class BMWClientAPI {
             geo: geo || process.env.BMW_GEO || ini.geo || Regions.NORTH_AMERICA,
             session: process.env.BMW_SESSION || ini.session || DEFAULT_SESSION_ID,
         }, auth);
-
-        if (fs.existsSync(`${process.env.HOME}/.bmwsession.json`)) {
-            try {
-                this._token = JSON.parse(fs.readFileSync(`${process.env.HOME}/.bmwsession.json`, 'utf8'));
-            }
-            catch {
-                // noop
-            }
-        }
     }
 
     get brand() {return "bmw"};
@@ -90,27 +81,22 @@ class BMWClientAPI {
         return UA[this.auth.geo]?.ocpApimSubscriptionKey;
     }
 
-    get token() {  return this._token; }
+    get token() { return CACHE.get('token'); }
     set token(val) {
-        this._token = val;
         if (val) {
-            this._token.expires = Date.now() + (this._token.expires_in || 0);
-
-            try {
-                // save the token to disk for quick restart
-                fs.writeSync(fs.openSync(`${process.env.HOME}/.bmwsession.json`, 'w'), JSON.stringify(this._token));
-            }
-            catch {
-                // noop
-            }
+            val.expires = Date.now() + (val.expires_in || 0);
+            CACHE.set('token', val, val.expires);
+        }
+        else {
+            CACHE.delete('token');
         }
     }
 
     get session() { return this.auth?.session; }
     set session(val) { if (val) this.auth.session = val; }
 
-    async get(path = '/', headers = {}, autologin = true, httpErrorAsError = true) {
-        return await this._request('GET', path, null, headers, 0, autologin, httpErrorAsError);
+    async get(path = '/', headers = {}, maxTTL = 0, autologin = true, httpErrorAsError = true) {
+        return await this._request('GET', path, null, headers, maxTTL, autologin, httpErrorAsError);
     }
 
     async post(path = '/', body = null, headers = {}, autologin = true, httpErrorAsError = true) {
@@ -123,16 +109,17 @@ class BMWClientAPI {
         const targetPath = path;
 
         if (CACHE.has(method + targetPath) && maxTTL > 0) {
-            const cache = CACHE.get(method + targetPath);
-            const lastModified = Date.parse(cache.headers.get('last-modified') || cache.headers.get('date') || 0);
-            if (lastModified + (maxTTL * 1000) > Date.now()) {
-                return cache._body;
+            if (maxTTL > 0) {
+                const cache = CACHE.get(method + targetPath);
+                if (cache) return cache;
+                // cache was stale
             }
             else {
-                // to avoid pile-ons, let's use stale cache for 10s
-                // TODO: make this work for cache misses too?
-                cache.headers.set('last-modified', (new Date(Date.now() + 3 * 1000)).toISOString());
+                CACHE.delete(method + targetPath);
             }
+            // to avoid pile-ons, let's use stale cache for 10s
+            // TODO: make this work for cache misses too?
+            // cache.headers.set('last-modified', (new Date(Date.now() + 3 * 1000)).toISOString());
         }
 
         const correlationID = uuid4();
@@ -141,7 +128,7 @@ class BMWClientAPI {
             'Accept-Language': 'en-US',
             'x-raw-locale': 'en-US',
             // 'Accept': '*/*',
-            'User-Agent': 'Dart/2.14 (dart:io)',
+            'User-Agent': 'Dart/2.15 (dart:io)',
             'X-User-Agent': `android(SP1A.210812.016.C1);${this.brand};${this.version};${this.region}`,
             'bmw-session-id': this.auth.session,
             'bmw-units-preferences': 'd=KM;v=L',
@@ -246,7 +233,10 @@ class BMWClientAPI {
         // TODO: what about other 3xx?
         else if (res.status === 200) {
             if (method === 'GET') {
-                CACHE.set(method + targetPath, res);
+                if (maxTTL > 0) {
+                    const expires = Date.parse(res.headers.get('last-modified') || res.headers.get('date') || 0) + maxTTL*1000;
+                    CACHE.set(method + targetPath, res._body, expires);
+                }
             }
         }
 
@@ -272,7 +262,7 @@ class BMWClientAPI {
             "bmw-correlation-id": correlationID,
         };
 
-        return await this.get('/eadrax-ucs/v1/presentation/oauth/config', configHeaders, false);
+        return await this.get('/eadrax-ucs/v1/presentation/oauth/config', configHeaders, 60*60, false);
     }
     async login(force = false, httpErrorAsError = true) {
         await this.refresh(force);
@@ -331,7 +321,7 @@ class BMWClientAPI {
 
     async refresh(force = false) {
         if (!this.token?.refresh_token) return;
-        if (!force && !this.token.expires < Date.now()) return;
+        if (!force) return;
 
         const oauthConfig = await this.oauthConfig();
 
@@ -355,7 +345,7 @@ class BMWClientAPI {
     }
 
     async vehicles() {
-        return await this.get(`/eadrax-vcs/v4/vehicles`);
+        return await this.get(`/eadrax-vcs/v4/vehicles`, {}, 60*60);
     }
 
     async vehicleState(vin) {
