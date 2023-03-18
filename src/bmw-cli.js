@@ -81,7 +81,7 @@ program
                 console.log(`${flag.flagId} - ${flag.isActive ? '✅' : '❌'}`);
             }
 
-            for (const vehicle of vehicle) {
+            for (const vehicle of vehicles) {
                 console.log();
                 console.log(`${vehicle.attributes?.model} ${vehicle.attributes?.year} (${vehicle.vin}):`);
                 for (const [capability, value] of Object.entries(vehicle.capabilities)) {
