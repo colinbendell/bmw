@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const BMWClientAPI = require('./bmw-api');
 const BMWClient = require('./bmw');
 const {Command} = require('commander');
