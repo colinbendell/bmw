@@ -1,7 +1,6 @@
 /* eslint-disable require-jsdoc */
 const { Buffer } = require('node:buffer');
-const fs = require('fs');
-const {fetch, reset} = require('@adobe/fetch').keepAlive();
+const {fetch} = require('@adobe/fetch').keepAlive();
 
 const {sleep, uuid4, generate, sha256Base64} = require('./utils');
 const IniFile = require('./inifile');
@@ -349,7 +348,7 @@ class BMWClientAPI {
     }
 
     async vehicleState(vin) {
-        return await this.get(`/eadrax-vcs/v4/vehicles/state`, {"bmw-vin": vin} );
+        return await this.get(`/eadrax-vcs/v4/vehicles/state`, {"bmw-vin": vin}, 59);
     }
     async vehicleRecalls(vin) {
         return await this.get(`/eadrax-recallcs/v2/recalls?vin=${vin}`, {"bmw-gcid": "b4802a8d-d2eb-4518-b0bc-23b5cb32e0de"});

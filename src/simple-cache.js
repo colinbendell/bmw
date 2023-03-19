@@ -5,7 +5,7 @@ class SimpleCache {
     #cacheFile = null;
     #cache = {};
     constructor(name = "simplecache") {
-        this.cacheFile = `${process.env.HOME}/.${name}.cache.json`;
+        this.cacheFile = `${process.env.SIMPLECACHE_DIR ?? "."}/.${name}.cache.json`;
         this.cache = {};
         try {
             const data = require('fs').readFileSync(this.cacheFile, 'utf8');
