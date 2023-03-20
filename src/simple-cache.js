@@ -17,7 +17,7 @@ class SimpleCache {
     }
 
     get(key) {
-        if ((this.cache[key]?.expires ?? 0) > Date.now()) {
+        if ((this.cache[key]?.expires ?? 0) < Date.now()) {
             delete this.cache[key];
             return undefined;
         }
@@ -25,7 +25,7 @@ class SimpleCache {
     }
 
     set(key, value, expires) {
-        expires = Date.parse(expires) || Date.now();
+        expires = new Date(expires).getTime() || Date.now();
         this.cache[key] = {value, expires};
         setTimeout(async () => {
             try {
