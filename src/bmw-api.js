@@ -83,7 +83,7 @@ class BMWClientAPI {
     get token() { return CACHE.get('token'); }
     set token(val) {
         if (val) {
-            val.expires = Date.now() + (val.expires_in || 0);
+            val.expires = Date.now() + ((val.expires_in || 0) * 1000);
             CACHE.set('token', val, val.expires);
         }
         else {
