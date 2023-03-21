@@ -56,7 +56,7 @@ program
 program
     .command('flags [vin]')
     .option('--json', 'output as JSON')
-    .option('--output -O <file>', 'save output to file (implies --json)')
+    .option('-O, --output <file>', 'save output to file (implies --json)')
     .description('Report Application Flags and vehicle attributes')
     .action(async (vin, options) => {
         const bmw = bmwClient();
@@ -119,7 +119,7 @@ program
     .command('status [vin]')
     .description('retrieve all vehicle data. If no VIN is provided, all vehicles are returned.')
     .option('--json', 'output summary in json')
-    .option('--output -O <file>', 'save output to file (implies --json)')
+    .option('-O, --output <file>', 'save output to file (implies --json)')
     .option('--only-changed', 'only output changed values')
     .action(async (vin, options) => {
         const bmw = bmwClient();
