@@ -8,7 +8,7 @@ const {formatNumber, formatMinutes, formatLocalTime} = require("./utils");
 const h3 = require("h3-js");
 const program = new Command();
 const crypto = require('crypto');
-const fs = require('fs');
+const fsPromises = require('fs').promises;
 
 function bmwClient() {
     return new BMWClient(program.opts().email, program.opts().password, program.opts().geo);
@@ -56,18 +56,20 @@ program
 program
     .command('flags [vin]')
     .option('--json', 'output as JSON')
+    .option('--output -O <file>', 'save output to file (implies --json)')
     .description('Report Application Flags and vehicle attributes')
     .action(async (vin, options) => {
         const bmw = bmwClient();
         const userFlags = await bmw.userFlags().catch(() => []);
         const vehicles = await bmw.vehicleDetails(vin, false, false).catch(() => []);
-        if (options.json) {
+        if (options.json || options.output) {
             const output = { vehicles: [], flags: {foo:{}}};
             for (const flag of userFlags.flags) {
                 output.flags[flag.flagId] = flag.isActive;
             }
             output.vehicles = vehicles.map(vehicle => {
                 delete vehicle.attributes.driverGuideInfo;
+                delete vehicle.attributes.lastFetched;
                 return {
                     vin: vehicle.vin,
                     appVehicleType: vehicle.appVehicleType,
@@ -76,7 +78,12 @@ program
                     capabilities: vehicle.capabilities,
                 }
             });
-            console.log(stringify(output));
+            if (options.output) {
+                await fsPromises.writeFile(options.output, stringify(output));
+            }
+            else {
+                console.log(stringify(output));
+            }
         }
         else {
             for (const flag of userFlags.flags) {
@@ -112,11 +119,12 @@ program
     .command('status [vin]')
     .description('retrieve all vehicle data. If no VIN is provided, all vehicles are returned.')
     .option('--json', 'output summary in json')
+    .option('--output -O <file>', 'save output to file (implies --json)')
     .option('--only-changed', 'only output changed values')
     .action(async (vin, options) => {
         const bmw = bmwClient();
         const res = await bmw.vehicleDetails(vin, false, false).catch(() => []);
-        if (options.json) {
+        if (options.json || options.output) {
             for (const vehicle of res) {
                 const output = {
                     vin: vehicle.vin,
@@ -136,10 +144,10 @@ program
                 }
                 if (options.onlyChanged) {
                     try {
-                        const lockFile = `${process.env.HOME}/.bmw${vehicle.vin}.lock`;
-                        const lastHash = fs.existsSync(lockFile) ? fs.readFileSync(lockFile, 'utf8') : '';
+                        const lockFile = `${process.env.BMW_LOCK_DIR ?? "."}/.bmw${vehicle.vin}.lock`;
+                        const lastHash = await fsPromises.readFile(lockFile).catch(() => '');
                         const hash = crypto.createHash('md5').update(`${output.vin}${output.km}${output.latitude}${output.longitude}${output.battery}${output.pluggedIn}${output.charging}${output.deepSleep}`).digest('hex');
-                        fs.writeSync(fs.openSync(lockFile, 'w'), hash)
+                        await fsPromises.writeFile(lockFile, hash);
                         if (hash === lastHash) {
                             return;
                         }
@@ -148,7 +156,13 @@ program
                         // noop
                     }
                 }
-                console.log(stringify(output, 0, null, {forceKeyOrder: ['vin', 'updatedAt', 'km', 'battery', 'latitude', 'longitude', 'heading', 'address', 'h3', 'pluggedIn', 'charging', 'chargingMinutes', 'deepSleep', 'climate']}));
+                const data = stringify(output, 0, null, {forceKeyOrder: ['vin', 'updatedAt', 'km', 'battery', 'latitude', 'longitude', 'heading', 'address', 'h3', 'pluggedIn', 'charging', 'chargingMinutes', 'deepSleep', 'climate']});
+                if (options.output) {
+                    await fsPromises.appendFile(options.output, data);
+                }
+                else {
+                    console.log(data);
+                }
             }
         }
         else {
