@@ -26,7 +26,7 @@ Authentication uses the MyBMW account credentials. It can be passed through to t
 
 > The valid `geo` values are: `na` (North America), `cn` (China) and `row` (Rest of World).
 
-> NB: `na` is the only one that has been really tested so far
+> NB: `na` and `row` has been tested so far
 
 ## Command Line Interface
 
